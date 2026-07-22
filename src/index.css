@@ -625,6 +625,34 @@ input:focus-visible {
   font-size: 0.6rem;
 }
 
+.atmosphere-warning {
+  position: absolute;
+  z-index: 8;
+  top: clamp(2rem, 6vw, 4.5rem);
+  left: 50%;
+  display: grid;
+  width: min(30rem, calc(100vw - 4rem));
+  gap: 0.35rem;
+  padding: 0.9rem 1.15rem;
+  border: 1px solid rgb(255 180 95 / 58%);
+  border-radius: 0.65rem;
+  color: #ffd8a6;
+  background: rgb(50 19 20 / 88%);
+  box-shadow: 0 12px 45px rgb(255 87 60 / 18%);
+  font-size: 0.8rem;
+  text-align: center;
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.atmosphere-warning strong {
+  color: #ffb45f;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.67rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .flight-hud {
   position: absolute;
   z-index: 6;

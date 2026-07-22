@@ -212,6 +212,7 @@ function Planet({ planet }: { planet: PlanetDescriptor }) {
       data-orbit-radius={planet.orbitRadius}
       data-orbit-period={planet.orbitPeriodSeconds}
       data-planet-radius={planet.radius}
+      data-body-radius={planet.radius}
       data-atmosphere-radius={atmosphereRadius(planet.radius)}
       data-information-radius={informationZoneRadius(planet.radius)}
     >
@@ -326,8 +327,14 @@ function CelestialCard({
 
 function Exploration({ system }: { system: GitHubSystem }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
-  const { experienceRef, flight, initialFlight, activeBody, simulationStartedAt } =
-    useFlightControls(system)
+  const {
+    experienceRef,
+    flight,
+    initialFlight,
+    activeBody,
+    atmosphereContact,
+    simulationStartedAt,
+  } = useFlightControls(system)
   const shipAppearance = describeShipAppearance(system)
 
   return (
@@ -364,6 +371,7 @@ function Exploration({ system }: { system: GitHubSystem }) {
           data-star-seed={starSeed}
           data-primary-hue={starAppearance.primaryHue}
           data-language-families={starAppearance.languageFamilies.join(',')}
+          data-body-radius={STAR_RADIUS}
           data-atmosphere-radius={atmosphereRadius(STAR_RADIUS)}
           data-information-radius={informationZoneRadius(STAR_RADIUS)}
         />
@@ -382,6 +390,18 @@ function Exploration({ system }: { system: GitHubSystem }) {
 
       {activeBody ? <CelestialCard activeBody={activeBody} system={system} /> : null}
 
+      {atmosphereContact ? (
+        <aside
+          className="atmosphere-warning"
+          role="alert"
+          aria-label="Peligro atmosférico"
+          data-contact-body={atmosphereContact.key}
+        >
+          <strong>Peligro atmosférico</strong>
+          <span>La nave no está preparada para atravesar la atmósfera.</span>
+        </aside>
+      ) : null}
+
       <output
         className="flight-hud"
         data-testid="flight-state"
@@ -393,6 +413,7 @@ function Exploration({ system }: { system: GitHubSystem }) {
         data-pitch={flight.pitch.toFixed(3)}
         data-speed={flight.speed.toFixed(3)}
         data-turbo={flight.turbo}
+        data-atmosphere-contact={atmosphereContact?.key ?? 'none'}
         aria-label="Estado de navegación"
       >
         <span>Velocidad {Math.round(flight.speed)}</span>

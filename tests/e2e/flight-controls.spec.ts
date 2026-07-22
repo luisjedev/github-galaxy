@@ -150,6 +150,13 @@ test('mantener Espacio activa el turbo sin desplazar el navegador cuando la expe
   })
   await page.locator('[data-app-state="exploration"]').focus()
   const initialScroll = await page.evaluate(() => window.scrollY)
+  const initialHeading = await numberAttribute(page, 'data-heading')
+
+  await page.keyboard.down('a')
+  await expect
+    .poll(async () => await numberAttribute(page, 'data-heading'))
+    .toBeGreaterThan(initialHeading + 2.5)
+  await page.keyboard.up('a')
 
   await page.keyboard.down('w')
   await page.keyboard.down(' ')

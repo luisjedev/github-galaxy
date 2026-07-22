@@ -59,9 +59,11 @@ async function interceptDestinations(context: BrowserContext) {
 }
 
 async function expectInformationOutsideAtmosphere(body: Locator) {
+  const bodyRadius = Number(await body.getAttribute('data-body-radius'))
   const atmosphereRadius = Number(await body.getAttribute('data-atmosphere-radius'))
   const informationRadius = Number(await body.getAttribute('data-information-radius'))
-  expect(informationRadius).toBeGreaterThan(atmosphereRadius)
+  expect(atmosphereRadius).toBeGreaterThan(bodyRadius)
+  expect(informationRadius - atmosphereRadius).toBeGreaterThanOrEqual(4)
 }
 
 test('muestra la ficha completa de la estrella y E abre el perfil explícitamente', async ({
@@ -147,11 +149,9 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   await popup.close()
 
-  await page.keyboard.down('w')
-  await page.keyboard.down(' ')
-  await expect(cards).toHaveCount(0, { timeout: 6_000 })
-  await page.keyboard.up(' ')
-  await page.keyboard.up('w')
+  await page.keyboard.down('s')
+  await expect(cards).toHaveCount(0, { timeout: 10_000 })
+  await page.keyboard.up('s')
 
   await page.keyboard.press('e')
   await page.waitForTimeout(300)

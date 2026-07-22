@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  detectAtmosphereContact,
+  resolveAtmosphereCollision,
   selectActiveCelestialBody,
   type ActiveCelestialBody,
+  type AtmosphereContact,
 } from '../domain/celestial-interaction'
 import {
   advanceFlight,
@@ -43,6 +46,8 @@ export function useFlightControls(system: GitHubSystem) {
   )[0]
   const [activeBody, setActiveBody] = useState<ActiveCelestialBody | null>(initialActiveBody)
   const activeBodyRef = useRef<ActiveCelestialBody | null>(initialActiveBody)
+  const [atmosphereContact, setAtmosphereContact] = useState<AtmosphereContact | null>(null)
+  const atmosphereContactRef = useRef<AtmosphereContact | null>(null)
   const flightInput = useRef<FlightInput>({ ...idleFlightInput })
   const experienceRef = useRef<HTMLElement>(null)
 
@@ -78,11 +83,13 @@ export function useFlightControls(system: GitHubSystem) {
     let previousTime = performance.now()
     const update = (time: number) => {
       const frameSeconds = (time - previousTime) / 1_000
+      const previousElapsedSeconds = (previousTime - simulationStartedAt) / 1_000
       previousTime = time
       const current = flightState.current
       const input = flightInput.current
       const hasInput = Object.values(input).some(Boolean)
-      const nextFlight =
+      const elapsedSeconds = (time - simulationStartedAt) / 1_000
+      const proposedFlight =
         !hasInput &&
         current.speed === 0 &&
         current.bank === 0 &&
@@ -90,13 +97,27 @@ export function useFlightControls(system: GitHubSystem) {
         !current.turbo
           ? current
           : advanceFlight(current, input, frameSeconds)
+      const collision = resolveAtmosphereCollision(
+        system,
+        current,
+        proposedFlight,
+        previousElapsedSeconds,
+        elapsedSeconds,
+      )
+      const nextFlight = collision.flight
 
       if (nextFlight !== current) {
         flightState.current = nextFlight
         setFlight(nextFlight)
       }
 
-      const elapsedSeconds = (time - simulationStartedAt) / 1_000
+      const nextContact =
+        collision.contact ?? detectAtmosphereContact(system, nextFlight, elapsedSeconds)
+      if (nextContact?.key !== atmosphereContactRef.current?.key) {
+        atmosphereContactRef.current = nextContact
+        setAtmosphereContact(nextContact)
+      }
+
       const nextActiveBody = selectActiveCelestialBody(system, nextFlight, elapsedSeconds)
       if (nextActiveBody?.key !== activeBodyRef.current?.key) {
         activeBodyRef.current = nextActiveBody
@@ -114,5 +135,12 @@ export function useFlightControls(system: GitHubSystem) {
     }
   }, [simulationStartedAt, system])
 
-  return { experienceRef, flight, initialFlight, activeBody, simulationStartedAt }
+  return {
+    experienceRef,
+    flight,
+    initialFlight,
+    activeBody,
+    atmosphereContact,
+    simulationStartedAt,
+  }
 }
