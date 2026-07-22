@@ -15,6 +15,9 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await expect(page.getByText('R', { exact: true })).toBeVisible()
   await expect(page.getByText('Esc', { exact: true })).toBeVisible()
   await expect(page.getByText(/táctil/i)).toHaveCount(0)
+  await expect(page.getByText(/API pública de GitHub sin autenticación/i)).toBeVisible()
+  await expect(page.getByText(/límite de solicitudes/i)).toBeVisible()
+  await expect(page.getByLabel(/token/i)).toHaveCount(0)
 })
 
 test('permite continuar con Enter y expone el estado de carga', async ({ page }) => {

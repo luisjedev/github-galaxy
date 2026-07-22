@@ -257,12 +257,28 @@ input:focus-visible {
   transform: translateY(-1px);
 }
 
-.form-hint {
+.form-hint,
+.form-error {
   margin: 0.65rem 0 0 1rem;
-  color: #687089;
   font-family: 'Space Mono', monospace;
   font-size: 0.64rem;
   letter-spacing: 0.06em;
+}
+
+.form-hint {
+  color: #687089;
+}
+
+.form-error {
+  color: #ffb4ad;
+}
+
+.api-notice {
+  max-width: 44rem;
+  margin: 1rem 0 0 1rem;
+  color: #757d98;
+  font-size: 0.72rem;
+  line-height: 1.5;
 }
 
 .controls-panel {
@@ -353,6 +369,41 @@ input:focus-visible {
   max-width: 34rem;
   color: #a2aac4;
   line-height: 1.7;
+}
+
+.error-panel > p:not(.eyebrow) {
+  max-width: 34rem;
+  margin: 1.4rem auto 0;
+  color: #a2aac4;
+  line-height: 1.7;
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 2rem;
+}
+
+.error-actions button {
+  padding: 0.85rem 1.2rem;
+  border: 1px solid rgb(169 149 255 / 35%);
+  border-radius: 0.55rem;
+  color: #f7f7ff;
+  background: rgb(128 103 230 / 18%);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.error-actions button:first-child {
+  border-color: transparent;
+  color: #101123;
+  background: linear-gradient(100deg, #a998ff, #8df5df);
+}
+
+.error-actions button:hover {
+  filter: brightness(1.1);
 }
 
 .notice__icon {

@@ -2,19 +2,26 @@ import type { GitHubSystem } from './github-system'
 
 export type LoadingStage = 'profile' | 'repositories' | 'system'
 
+export interface AppError {
+  username: string
+  title: string
+  message: string
+  retryable?: boolean
+}
+
 export type AppState =
   | { name: 'menu' }
   | { name: 'loading'; username: string; stage: LoadingStage }
   | { name: 'exploration'; username: string; system: GitHubSystem }
   | { name: 'pause'; username: string; system: GitHubSystem }
-  | { name: 'error'; message: string }
+  | { name: 'error'; error: AppError }
 
 export type AppEvent =
   | { type: 'SUBMIT_USER'; username: string }
   | { type: 'LOAD_PROGRESS'; stage: LoadingStage }
   | { type: 'SYSTEM_READY'; system: GitHubSystem }
   | { type: 'TOGGLE_PAUSE' }
-  | { type: 'FAIL'; message: string }
+  | { type: 'FAIL'; error: AppError }
   | { type: 'RETURN_TO_MENU' }
 
 export function transitionAppState(state: AppState, event: AppEvent): AppState {
@@ -36,7 +43,7 @@ export function transitionAppState(state: AppState, event: AppEvent): AppState {
       }
       return state
     case 'FAIL':
-      return { name: 'error', message: event.message }
+      return { name: 'error', error: event.error }
     case 'RETURN_TO_MENU':
       return { name: 'menu' }
   }

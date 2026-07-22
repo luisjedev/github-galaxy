@@ -1,9 +1,15 @@
 import { useEffect, useReducer, useState, type CSSProperties, type FormEvent } from 'react'
-import { transitionAppState, type AppState, type LoadingStage } from './domain/app-state'
+import {
+  transitionAppState,
+  type AppError,
+  type AppState,
+  type LoadingStage,
+} from './domain/app-state'
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
 import type { GitHubSystem } from './domain/github-system'
+import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
-import { loadGitHubSystem } from './platform/github-client'
+import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
 
 const controls = [
   ['W / S', 'Avanzar · frenar'],
@@ -59,11 +65,14 @@ function CompatibilityNotice({ reason }: { reason: 'mobile' | 'webgl' }) {
 
 function Menu({ onExplore }: { onExplore: (username: string) => void }) {
   const [username, setUsername] = useState('')
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const normalizedUsername = username.trim()
-    if (normalizedUsername) onExplore(normalizedUsername)
+    const error = validateGitHubUsername(normalizedUsername)
+    setValidationError(error)
+    if (!error) onExplore(normalizedUsername)
   }
 
   return (
@@ -96,15 +105,31 @@ function Menu({ onExplore }: { onExplore: (username: string) => void }) {
               autoCapitalize="none"
               spellCheck="false"
               placeholder="octocat"
-              required
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              aria-invalid={Boolean(validationError)}
+              aria-describedby={validationError ? 'username-error' : 'username-hint'}
+              onChange={(event) => {
+                setUsername(event.target.value)
+                setValidationError(null)
+              }}
             />
             <button type="submit">
               Explorar sistema <span aria-hidden="true">→</span>
             </button>
           </div>
-          <p className="form-hint">Pulsa Enter para despegar</p>
+          {validationError ? (
+            <p className="form-error" id="username-error" role="alert">
+              {validationError}
+            </p>
+          ) : (
+            <p className="form-hint" id="username-hint">
+              Pulsa Enter para despegar
+            </p>
+          )}
+          <p className="api-notice">
+            Usamos la API pública de GitHub sin autenticación. Tiene un límite de solicitudes y nunca
+            te pediremos un token.
+          </p>
         </form>
       </section>
 
@@ -189,15 +214,83 @@ function Pause({ username }: { username: string }) {
   )
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({
+  error,
+  onRetry,
+  onReturnToMenu,
+}: {
+  error: AppError
+  onRetry: () => void
+  onReturnToMenu: () => void
+}) {
   return (
     <main className="centered-layout" data-app-state="error">
-      <section className="glass-panel" role="alert">
+      <section className="glass-panel error-panel" role="alert">
         <p className="eyebrow">No hemos podido despegar</p>
-        <h1>{message}</h1>
+        <h1>{error.title}</h1>
+        <p>{error.message}</p>
+        <div className="error-actions">
+          {error.retryable === false ? null : (
+            <button type="button" onClick={onRetry}>
+              Reintentar
+            </button>
+          )}
+          <button type="button" onClick={onReturnToMenu}>
+            Volver al menú
+          </button>
+        </div>
       </section>
     </main>
   )
+}
+
+function describeLoadError(username: string, error: unknown): AppError {
+  if (error instanceof GitHubRequestError) {
+    if (error.kind === 'not-found') {
+      return {
+        username,
+        title: `No existe el usuario “${username}”`,
+        message: 'Comprueba el nombre de usuario y vuelve a intentarlo.',
+      }
+    }
+
+    if (error.kind === 'rate-limit') {
+      const remainingMinutes = error.retryAt
+        ? Math.max(1, Math.ceil((error.retryAt - Date.now()) / 60_000))
+        : null
+      const retryContext = remainingMinutes
+        ? ` Podrás volver a intentarlo ${
+            remainingMinutes === 1 ? 'en aproximadamente 1 minuto' : `en unos ${remainingMinutes} minutos`
+          }.`
+        : ' Espera unos minutos antes de volver a intentarlo.'
+
+      return {
+        username,
+        title: 'GitHub ha limitado temporalmente las solicitudes',
+        message: `GitGalaxy usa la API pública de GitHub sin autenticación, que tiene un límite temporal.${retryContext} Nunca te pediremos un token.`,
+      }
+    }
+
+    if (error.kind === 'network') {
+      return {
+        username,
+        title: 'No hemos podido conectar con GitHub',
+        message: 'Revisa tu conexión de red y vuelve a intentarlo cuando estés en línea.',
+      }
+    }
+
+    return {
+      username,
+      title: 'GitHub ha devuelto un error',
+      message: 'Puede ser un problema temporal de la API. Reintenta la operación en unos instantes.',
+    }
+  }
+
+  return {
+    username,
+    title: 'GitHub no ha podido preparar este sistema',
+    message: 'Puedes reintentar la operación o volver al menú.',
+  }
 }
 
 function updateUserQuery(username: string, mode: 'push' | 'replace' = 'push') {
@@ -206,9 +299,28 @@ function updateUserQuery(username: string, mode: 'push' | 'replace' = 'push') {
   window.history[mode === 'push' ? 'pushState' : 'replaceState']({}, '', url)
 }
 
+function clearUserQuery() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('user')
+  window.history.pushState({}, '', url)
+}
+
 function initialAppState(): AppState {
   const username = new URL(window.location.href).searchParams.get('user')?.trim()
-  return username ? { name: 'loading', username, stage: 'profile' } : { name: 'menu' }
+  if (!username) return { name: 'menu' }
+
+  const validationError = validateGitHubUsername(username)
+  return validationError
+    ? {
+        name: 'error',
+        error: {
+          username,
+          title: 'El nombre de usuario no es válido',
+          message: validationError,
+          retryable: false,
+        },
+      }
+    : { name: 'loading', username, stage: 'profile' }
 }
 
 function AppView({ initialState = initialAppState() }: { initialState?: AppState }) {
@@ -229,9 +341,9 @@ function AppView({ initialState = initialAppState() }: { initialState?: AppState
         updateUserQuery(system.profile.login, 'replace')
         dispatch({ type: 'SYSTEM_READY', system })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (isActive) {
-          dispatch({ type: 'FAIL', message: 'GitHub no ha podido preparar este sistema' })
+          dispatch({ type: 'FAIL', error: describeLoadError(loadingUsername, error) })
         }
       })
 
@@ -257,7 +369,16 @@ function AppView({ initialState = initialAppState() }: { initialState?: AppState
     case 'pause':
       return <Pause username={state.username} />
     case 'error':
-      return <ErrorState message={state.message} />
+      return (
+        <ErrorState
+          error={state.error}
+          onRetry={() => dispatch({ type: 'SUBMIT_USER', username: state.error.username })}
+          onReturnToMenu={() => {
+            clearUserQuery()
+            dispatch({ type: 'RETURN_TO_MENU' })
+          }}
+        />
+      )
   }
 }
 

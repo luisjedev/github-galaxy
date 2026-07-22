@@ -16,6 +16,17 @@ interface LoadOptions {
   onStage?: (stage: LoadingStage) => void
 }
 
+export class GitHubRequestError extends Error {
+  constructor(
+    public readonly kind: 'not-found' | 'rate-limit' | 'network' | 'api',
+    message: string,
+    public readonly retryAt?: number,
+  ) {
+    super(message)
+    this.name = 'GitHubRequestError'
+  }
+}
+
 interface CachedSystem {
   cachedAt: number
   system: GitHubSystem
@@ -66,7 +77,33 @@ function writeCachedSystem(key: string, system: GitHubSystem) {
   }
 }
 
-function normalizeProfile(profile: GitHubProfile): GitHubProfile {
+function invalidResponse(): never {
+  throw new GitHubRequestError('api', 'GitHub devolvió una respuesta incompleta')
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
+}
+
+function normalizeProfile(value: unknown): GitHubProfile {
+  if (!value || typeof value !== 'object') invalidResponse()
+  const profile = value as Record<string, unknown>
+
+  if (
+    typeof profile.id !== 'number' ||
+    !Number.isFinite(profile.id) ||
+    typeof profile.login !== 'string' ||
+    !profile.login ||
+    !isNullableString(profile.name) ||
+    typeof profile.avatar_url !== 'string' ||
+    typeof profile.html_url !== 'string' ||
+    !isNullableString(profile.bio) ||
+    typeof profile.followers !== 'number' ||
+    typeof profile.public_repos !== 'number'
+  ) {
+    invalidResponse()
+  }
+
   return {
     id: profile.id,
     login: profile.login,
@@ -79,7 +116,28 @@ function normalizeProfile(profile: GitHubProfile): GitHubProfile {
   }
 }
 
-function normalizeRepository(repository: GitHubRepository): GitHubRepository {
+function normalizeRepository(value: unknown): GitHubRepository {
+  if (!value || typeof value !== 'object') invalidResponse()
+  const repository = value as Record<string, unknown>
+
+  if (
+    typeof repository.id !== 'number' ||
+    !Number.isFinite(repository.id) ||
+    typeof repository.name !== 'string' ||
+    typeof repository.html_url !== 'string' ||
+    !isNullableString(repository.description) ||
+    typeof repository.fork !== 'boolean' ||
+    typeof repository.archived !== 'boolean' ||
+    typeof repository.is_template !== 'boolean' ||
+    !isNullableString(repository.language) ||
+    typeof repository.stargazers_count !== 'number' ||
+    typeof repository.forks_count !== 'number' ||
+    typeof repository.size !== 'number' ||
+    typeof repository.updated_at !== 'string'
+  ) {
+    invalidResponse()
+  }
+
   return {
     id: repository.id,
     name: repository.name,
@@ -103,14 +161,53 @@ function githubHeaders(): HeadersInit {
   }
 }
 
-async function readJson<T>(url: string): Promise<{ data: T; response: Response }> {
-  const response = await fetch(url, { headers: githubHeaders() })
-
-  if (!response.ok) {
-    throw new Error(`GitHub respondió con el estado ${response.status}`)
+async function readJson<T>(
+  url: string,
+  options: { notFoundMeansUser?: boolean } = {},
+): Promise<{ data: T; response: Response }> {
+  let response: Response
+  try {
+    response = await fetch(url, { headers: githubHeaders() })
+  } catch {
+    throw new GitHubRequestError('network', 'No se pudo conectar con GitHub')
   }
 
-  return { data: (await response.json()) as T, response }
+  if (!response.ok) {
+    if (response.status === 404 && options.notFoundMeansUser) {
+      throw new GitHubRequestError('not-found', 'El usuario de GitHub no existe')
+    }
+
+    const remaining = response.headers.get('x-ratelimit-remaining')
+    const resetAtSeconds = Number(response.headers.get('x-ratelimit-reset'))
+    const retryAfterSeconds = Number(response.headers.get('retry-after'))
+    const hasRateLimitReset = Number.isFinite(resetAtSeconds) && resetAtSeconds > 0
+    const hasRetryAfter = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+    const isRateLimit =
+      response.status === 429 ||
+      remaining === '0' ||
+      (response.status === 403 && (hasRateLimitReset || hasRetryAfter))
+
+    if (isRateLimit) {
+      const retryAt = hasRateLimitReset
+        ? resetAtSeconds * 1_000
+        : hasRetryAfter
+          ? Date.now() + retryAfterSeconds * 1_000
+          : undefined
+      throw new GitHubRequestError(
+        'rate-limit',
+        'GitHub ha limitado temporalmente las solicitudes públicas',
+        retryAt,
+      )
+    }
+
+    throw new GitHubRequestError('api', `GitHub respondió con el estado ${response.status}`)
+  }
+
+  try {
+    return { data: (await response.json()) as T, response }
+  } catch {
+    throw new GitHubRequestError('api', 'GitHub devolvió una respuesta ilegible')
+  }
 }
 
 function nextPage(response: Response): string | null {
@@ -130,9 +227,8 @@ async function fetchRepositories(username: string): Promise<GitHubRepository[]> 
   let url: string | null = `${GITHUB_API_URL}/users/${encodeURIComponent(username)}/repos?type=owner&per_page=${PAGE_SIZE}&page=1`
 
   while (url) {
-    const page: { data: GitHubRepository[]; response: Response } = await readJson<
-      GitHubRepository[]
-    >(url)
+    const page = await readJson<unknown>(url)
+    if (!Array.isArray(page.data)) invalidResponse()
     repositories.push(...page.data.map(normalizeRepository))
     url = nextPage(page.response)
   }
@@ -145,8 +241,9 @@ async function requestSystem(
   notify: (stage: LoadingStage) => void,
 ): Promise<GitHubSystem> {
   notify('profile')
-  const profileResponse = await readJson<GitHubProfile>(
+  const profileResponse = await readJson<unknown>(
     `${GITHUB_API_URL}/users/${encodeURIComponent(username)}`,
+    { notFoundMeansUser: true },
   )
   const profile = normalizeProfile(profileResponse.data)
   notify('repositories')
