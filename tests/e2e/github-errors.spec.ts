@@ -30,7 +30,7 @@ test('un usuario inexistente se puede corregir o reintentar sin guardar el fallo
     await route.fulfill({ json: [] })
   })
 
-  await page.goto('/?user=missing-user')
+  await page.goto('/missing-user')
 
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('No existe el usuario “missing-user”')
@@ -78,7 +78,7 @@ test('un límite de solicitudes explica cuándo reintentar y la API pública uti
     await route.fulfill({ json: [] })
   })
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
 
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('GitHub ha limitado temporalmente las solicitudes')
@@ -112,7 +112,7 @@ test('un fallo de red muestra un estado recuperable distinto y permite reintenta
     await route.fulfill({ json: [] })
   })
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
 
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('No hemos podido conectar con GitHub')
@@ -169,7 +169,7 @@ test('una respuesta incompleta no se guarda en caché y se recupera con datos v�
     await route.fulfill({ json: [] })
   })
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
 
   await expect(page.getByRole('alert')).toContainText('GitHub ha devuelto un error')
   const cachedKeys = await page.evaluate(() =>
@@ -187,7 +187,7 @@ test('un fallo de la API permite volver al menú y corregir el usuario', async (
     await route.fulfill({ status: 500, json: { message: 'Internal Server Error' } })
   })
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
 
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('GitHub ha devuelto un error')

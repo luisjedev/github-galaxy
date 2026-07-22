@@ -47,7 +47,7 @@ test('el avance descendente se detiene ante la atmósfera y la nave puede separa
   page,
 }) => {
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   const star = page.getByLabel('Estrella de pilot')
@@ -108,7 +108,7 @@ test('el respawn sobre la última órbita queda fuera de la atmósfera planetari
   page,
 }) => {
   await interceptGitHub(page, repositories)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   const planet = page.locator('[data-repository-id="1"]')

@@ -15,7 +15,7 @@ pnpm install
 pnpm dev
 ```
 
-Vite mostrará la URL local de desarrollo en la terminal. Puedes abrir directamente un perfil con `/?user=<usuario>`; la aplicación consulta la REST API pública de GitHub desde el navegador sin autenticación ni token.
+Vite mostrará la URL local de desarrollo en la terminal. Puedes abrir directamente un perfil con `/<usuario>` (por ejemplo, `/octocat`); la aplicación consulta la REST API pública de GitHub desde el navegador sin autenticación ni token.
 
 Al atravesar por completo el cinturón exterior puedes usar un agujero de gusano para visitar un perfil público aleatorio con al menos 15 repositorios. La transición mantiene el sistema de origen intacto hasta que GitHub confirma y carga el destino; no requiere backend ni token.
 
@@ -48,4 +48,4 @@ pnpm build
 pnpm preview
 ```
 
-El artefacto estático se genera en `dist/` y puede desplegarse directamente en Vercel u otro servicio de hosting estático. No requiere backend, autenticación ni base de datos.
+El artefacto estático se genera en `dist/` y puede desplegarse directamente en Vercel u otro servicio de hosting estático. `vercel.json` redirige las rutas de perfiles a la aplicación para que enlaces como `/octocat` funcionen al abrirlos directamente. En otros servicios debes configurar el fallback de SPA hacia `index.html`. No requiere backend, autenticación ni base de datos.

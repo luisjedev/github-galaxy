@@ -72,7 +72,7 @@ test('muestra la ficha completa de la estrella y E abre el perfil explícitament
 }) => {
   await interceptDestinations(context)
   await interceptGitHub(page, [])
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   const card = page.getByRole('complementary', { name: 'Ficha de Galaxy Pilot' })
@@ -124,7 +124,7 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
 }) => {
   await interceptDestinations(context)
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
 
   const cards = page.getByRole('complementary', { name: /^Ficha de/ })
   const outermostRepository = repositories[1]
@@ -146,7 +146,7 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
 
   await page.waitForTimeout(300)
   expect(context.pages()).toHaveLength(1)
-  await expect(page).toHaveURL(/\?user=pilot$/)
+  await expect(page).toHaveURL(/\/pilot$/)
 
   const popupPromise = context.waitForEvent('page')
   await page.keyboard.press('e')
@@ -176,5 +176,5 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
   await page.keyboard.press('e')
   await page.waitForTimeout(300)
   expect(context.pages()).toHaveLength(1)
-  await expect(page).toHaveURL(/\?user=pilot$/)
+  await expect(page).toHaveURL(/\/pilot$/)
 })

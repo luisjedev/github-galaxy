@@ -62,7 +62,7 @@ test('abre directamente desde la URL un perfil sin repositorios como estrella so
 }) => {
   const requests = await interceptGitHub(page, [{ ...repository(1), fork: true }])
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
 
   await expect(page.getByLabel('Usuario de GitHub')).toHaveCount(0)
   await expect(page.getByRole('status')).toContainText('Consultando el perfil público de stargazer')
@@ -85,7 +85,7 @@ test('reutiliza la caché durante quince minutos y refresca los datos al expirar
   })
   const requests = await interceptGitHub(page)
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   const initialSeed = await page.getByLabel('Estrella de stargazer').getAttribute('data-star-seed')
   expect(requests).toHaveLength(2)
@@ -115,7 +115,7 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
     { ...repository(5), language: 'TypeScript', is_template: true },
   ])
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   const normal = page.locator('[data-repository-id="1"] .procedural-planet')
@@ -187,7 +187,7 @@ test('reduce parpadeo, pulsaciones y partículas cuando el sistema solicita meno
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await interceptGitHub(page)
 
-  await page.goto('/?user=stargazer')
+  await page.goto('/stargazer')
 
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   await expect(
@@ -209,10 +209,10 @@ test('carga y comparte desde el menú un sistema obtenido de todas las páginas 
   await page.getByLabel('Usuario de GitHub').fill('StarGazer')
   await page.getByRole('button', { name: 'Explorar sistema' }).click()
 
-  await expect(page).toHaveURL(/\?user=StarGazer$/)
+  await expect(page).toHaveURL(/\/StarGazer$/)
   await expect(page.getByRole('status')).toContainText('Consultando el perfil público de StarGazer')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
-  await expect(page).toHaveURL(/\?user=stargazer$/)
+  await expect(page).toHaveURL(/\/stargazer$/)
   await expect(page.getByRole('heading', { name: 'Sistema de stargazer' })).toBeVisible()
   await expect(page.getByLabel('Estrella de stargazer')).toHaveAttribute('data-star-seed', /\d+/)
   await expect(page.getByText('101 proyectos públicos encontrados')).toHaveCount(0)

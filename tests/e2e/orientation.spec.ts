@@ -45,7 +45,7 @@ async function numberAttribute(page: Page, name: string) {
 
 test.beforeEach(async ({ page }) => {
   await interceptGitHub(page)
-  await page.goto('/?user=navigator')
+  await page.goto('/navigator')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 })
 

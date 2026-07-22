@@ -85,8 +85,8 @@ La aplicación podrá abrir un sistema desde el menú principal o directamente m
 - El MVP es una experiencia de exploración y visualización; no tendrá condiciones de victoria, misiones, puntuación, economía, progresión ni competición.
 - La plataforma objetivo es navegador de escritorio con teclado. No se implementarán controles táctiles en el MVP.
 - La aplicación tendrá, como mínimo, los estados de menú, carga, exploración, pausa y error.
-- La entrada principal permitirá escribir un nombre de usuario de GitHub. El query parameter canónico será `user`, por ejemplo `/?user=octocat`.
-- Cuando exista un `user` válido en la URL, la carga comenzará directamente. Al cargar desde el menú, la URL se actualizará para producir un enlace compartible.
+- La entrada principal permitirá escribir un nombre de usuario de GitHub. La ruta canónica incluirá directamente el usuario, por ejemplo `/octocat`.
+- Cuando exista un nombre de usuario válido en la ruta, la carga comenzará directamente. Al cargar desde el menú, la URL se actualizará para producir un enlace compartible.
 - Los estados de error distinguirán, al menos, usuario inexistente, límite de API, fallo de red/API y ausencia de WebGL.
 - Un perfil válido sin repositorios propios generará una estrella solitaria; no será tratado como error.
 
@@ -220,7 +220,7 @@ La aplicación podrá abrir un sistema desde el menú principal o directamente m
 - Las pruebas de transformación cubrirán exclusión de forks, límite de veinte, pesos 40/35/25, transformaciones logarítmicas, desempates estables, repositorios sin lenguaje, vacíos, archivados y plantillas.
 - Las pruebas deterministas comprobarán que una entrada idéntica produce parámetros idénticos, que el orden de entrada no cambia el resultado y que un cambio relevante de datos puede cambiar el sistema de manera controlada.
 - Las pruebas end-to-end cubrirán al menos los siguientes escenarios de API: perfil normal con más de veinte repositorios, perfil sin repositorios propios, usuario inexistente, límite de solicitudes y fallo de red.
-- Se comprobará que `/?user=<usuario>` inicia la carga, que el menú actualiza la URL y que un nombre inválido conduce a un estado recuperable.
+- Se comprobará que `/<usuario>` inicia la carga, que el menú actualiza la URL y que un nombre inválido conduce a un estado recuperable.
 - Se comprobará que solo se muestra la ficha del cuerpo próximo activo, que `E` abre su URL en una pestaña nueva y que no se abre ningún enlace sin una acción explícita.
 - Se comprobará que los controles de teclado modifican externamente el estado de navegación esperado, que la pausa detiene la interacción correspondiente y que el navegador no ejecuta scroll por `Espacio` durante el pilotaje.
 - Se comprobará que la colisión detiene la nave antes de atravesar el cuerpo y hace visible el aviso atmosférico, sin daño ni rebote.

@@ -78,5 +78,5 @@ test('permite despegar directamente hacia un sistema aleatorio', async ({ page }
     'data-origin-user',
     'random-pilot',
   )
-  await expect(page).toHaveURL(/\?user=random-pilot$/)
+  await expect(page).toHaveURL(/\/random-pilot$/)
 })

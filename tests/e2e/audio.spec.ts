@@ -129,7 +129,7 @@ test('una entrada directa activa el audio por defecto con la primera interacció
 }) => {
   await installControlledAudioContext(page)
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   await expect(page.getByTestId('audio-control')).toHaveAttribute('data-audio-state', 'waiting')
@@ -183,7 +183,7 @@ test('Explorar activa el paisaje sonoro desde la interacción explícita del men
 test('el silencio global se conserva al pausar y al cargar otro sistema', async ({ page }) => {
   await installControlledAudioContext(page)
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   const audioControl = page.getByTestId('audio-control')
@@ -209,7 +209,7 @@ test('el silencio global se conserva al pausar y al cargar otro sistema', async 
 test('un fallo de AudioContext no impide explorar ni usar el control global', async ({ page }) => {
   await installFailingAudioContext(page)
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   await page.getByRole('button', { name: 'Activar audio' }).click()
@@ -227,7 +227,7 @@ test('la carga y el salto de teletransporte exponen señales sonoras sincronizad
 }) => {
   await installControlledAudioContext(page)
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   const exploration = page.locator('[data-app-state="exploration"]')
   const flight = page.getByTestId('flight-state')
   await expect(exploration).toBeVisible()

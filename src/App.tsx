@@ -1009,20 +1009,31 @@ function describeRandomLoadError(error: unknown): AppError {
   }
 }
 
-function updateUserQuery(username: string, mode: 'push' | 'replace' = 'push') {
+function updateUserPath(username: string, mode: 'push' | 'replace' = 'push') {
   const url = new URL(window.location.href)
-  url.searchParams.set('user', username)
+  url.pathname = `/${encodeURIComponent(username)}`
+  url.searchParams.delete('user')
   window.history[mode === 'push' ? 'pushState' : 'replaceState']({}, '', url)
 }
 
-function clearUserQuery() {
+function clearUserPath() {
   const url = new URL(window.location.href)
+  url.pathname = '/'
   url.searchParams.delete('user')
   window.history.pushState({}, '', url)
 }
 
 function initialAppState(): AppState {
-  const username = new URL(window.location.href).searchParams.get('user')?.trim()
+  const encodedUsername = new URL(window.location.href).pathname
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+  let username = encodedUsername
+  try {
+    username = decodeURIComponent(encodedUsername)
+  } catch {
+    // La validación mostrará un error para rutas con una codificación incorrecta.
+  }
+  username = username.trim()
   if (!username) return { name: 'menu' }
 
   const validationError = validateGitHubUsername(username)
@@ -1072,7 +1083,7 @@ function AppView({
     void request
       .then((system) => {
         if (!isActive) return
-        updateUserQuery(system.profile.login, 'replace')
+        updateUserPath(system.profile.login, 'replace')
         dispatch({ type: 'SYSTEM_READY', system })
       })
       .catch((error: unknown) => {
@@ -1091,7 +1102,7 @@ function AppView({
   }, [isRandomLoading, loadingUsername])
 
   const returnToMenu = () => {
-    clearUserQuery()
+    clearUserPath()
     dispatch({ type: 'RETURN_TO_MENU' })
   }
 
@@ -1101,7 +1112,7 @@ function AppView({
         <Menu
           onExplore={(username) => {
             onAudioActivation()
-            updateUserQuery(username)
+            updateUserPath(username)
             dispatch({ type: 'SUBMIT_USER', username })
           }}
           onExploreRandom={() => {
@@ -1142,7 +1153,7 @@ function AppView({
               ) === index,
             )
             setRecentLogins(visited.slice(0, 8))
-            updateUserQuery(destination.profile.login, 'push')
+            updateUserPath(destination.profile.login, 'push')
             dispatch({ type: 'REPLACE_SYSTEM', system: destination })
           }}
         />

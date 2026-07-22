@@ -59,7 +59,7 @@ test('cruzar el cinturón abre una sola decisión, bloquea controles y quedarse 
     await fulfillSystemRoute(route, origin.login)
   })
 
-  await page.goto(`/?user=${origin.login}`)
+  await page.goto(`/${origin.login}`)
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   const spawn = {
     x: await flightNumber(page, 'data-x'),
@@ -89,7 +89,7 @@ test('cruzar el cinturón abre una sola decisión, bloquea controles y quedarse 
 
   await page.getByRole('button', { name: 'Quedarme en este sistema' }).click()
   await expect(decision).toHaveCount(0)
-  await expect(page).toHaveURL(new RegExp(`\\?user=${origin.login}$`))
+  await expect(page).toHaveURL(new RegExp(`/${origin.login}$`))
   expect(searchRequests).toBe(0)
   expect(await flightNumber(page, 'data-x')).toBeCloseTo(spawn.x, 3)
   expect(await flightNumber(page, 'data-z')).toBeCloseTo(spawn.z, 3)
@@ -128,7 +128,7 @@ test('viajar consulta Search, mantiene el túnel hasta cargar y llega al respawn
     )
   })
 
-  await page.goto(`/?user=${origin.login}`)
+  await page.goto(`/${origin.login}`)
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   const audioControl = page.getByTestId('audio-control')
   await audioControl.click()
@@ -154,7 +154,7 @@ test('viajar consulta Search, mantiene el túnel hasta cargar y llega al respawn
   await page.keyboard.press('e')
   await page.waitForTimeout(800)
   await expect(tunnel).toBeVisible()
-  await expect(page).toHaveURL(new RegExp(`\\?user=${origin.login}$`))
+  await expect(page).toHaveURL(new RegExp(`/${origin.login}$`))
 
   await testInfo.attach('tunel-agujero-de-gusano.png', {
     body: await page.screenshot(),
@@ -162,7 +162,7 @@ test('viajar consulta Search, mantiene el túnel hasta cargar y llega al respawn
   })
   releaseRepositories()
 
-  await expect(page).toHaveURL(new RegExp(`\\?user=${destination.login}$`), {
+  await expect(page).toHaveURL(new RegExp(`/${destination.login}$`), {
     timeout: 4_000,
   })
   expect(Date.now() - startedAt).toBeGreaterThanOrEqual(700)
@@ -201,14 +201,14 @@ test('fallos de red y rate limit conservan el origen y ofrecen reintentar o qued
     await fulfillSystemRoute(route, origin.login)
   })
 
-  await page.goto(`/?user=${origin.login}`)
+  await page.goto(`/${origin.login}`)
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   await crossSystemBoundary(page)
   await page.getByRole('button', { name: 'Atravesar el agujero de gusano' }).click()
 
   const errorDialog = page.getByRole('dialog')
   await expect(errorDialog).toContainText('Se ha perdido la conexión durante el viaje')
-  await expect(page).toHaveURL(new RegExp(`\\?user=${origin.login}$`))
+  await expect(page).toHaveURL(new RegExp(`/${origin.login}$`))
   await expect(page.getByTestId('flight-state')).toHaveAttribute('data-speed', '0.000')
 
   await page.getByRole('button', { name: 'Reintentar el viaje' }).click()
@@ -222,7 +222,7 @@ test('fallos de red y rate limit conservan el origen y ofrecen reintentar o qued
     'data-controls-locked',
     'false',
   )
-  await expect(page).toHaveURL(new RegExp(`\\?user=${origin.login}$`))
+  await expect(page).toHaveURL(new RegExp(`/${origin.login}$`))
 })
 
 test('un candidato actual repetido agota intentos sin viajes superpuestos y permite reintentar', async ({
@@ -248,7 +248,7 @@ test('un candidato actual repetido agota intentos sin viajes superpuestos y perm
     )
   })
 
-  await page.goto(`/?user=${origin.login}`)
+  await page.goto(`/${origin.login}`)
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   await crossSystemBoundary(page)
   const travelButton = page.getByRole('button', { name: 'Atravesar el agujero de gusano' })
@@ -258,7 +258,7 @@ test('un candidato actual repetido agota intentos sin viajes superpuestos y perm
   await expect(errorDialog).toContainText('No hemos podido confirmar un destino distinto')
   expect(travelAttempts).toBe(1)
   await page.getByRole('button', { name: 'Reintentar el viaje' }).click()
-  await expect(page).toHaveURL(new RegExp(`\\?user=${destination.login}$`), {
+  await expect(page).toHaveURL(new RegExp(`/${destination.login}$`), {
     timeout: 4_000,
   })
   expect(travelAttempts).toBe(2)

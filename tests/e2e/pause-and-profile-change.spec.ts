@@ -74,7 +74,7 @@ test('Esc pausa y reanuda la exploración sin aceptar controles de pilotaje dura
   page,
 }) => {
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   const exploration = page.locator('[data-app-state="exploration"]')
   await expect(exploration).toBeVisible()
   await expect(exploration).toBeFocused()
@@ -122,7 +122,7 @@ test('volver al menú limpia la exploración anterior y permite cargar otro perf
   page,
 }) => {
   await interceptGitHub(page)
-  await page.goto('/?user=pilot')
+  await page.goto('/pilot')
   await expect(page.getByRole('heading', { name: 'Sistema de pilot' })).toBeVisible()
   await expect(page.locator('[data-app-state="exploration"]')).toBeFocused()
 
@@ -142,7 +142,7 @@ test('volver al menú limpia la exploración anterior y permite cargar otro perf
   await page.getByRole('button', { name: 'Explorar sistema' }).click()
 
   await expect(page.getByRole('heading', { name: 'Sistema de navigator' })).toBeVisible()
-  await expect(page).toHaveURL('/?user=navigator')
+  await expect(page).toHaveURL('/navigator')
   await expect(page.getByLabel('Planeta new-horizons, crystalline')).toBeAttached()
   await expect(page.getByLabel('Planeta typescript-flight, crystalline')).toHaveCount(0)
 })
