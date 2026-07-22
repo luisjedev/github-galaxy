@@ -96,6 +96,19 @@ export function createInitialFlight(system: GitHubSystem): InitialFlight {
   }
 }
 
+export function createStarReturnFlight(): FlightState {
+  return {
+    x: 0,
+    z: -EMPTY_SYSTEM_SPAWN_DISTANCE,
+    altitude: SPAWN_ALTITUDE,
+    heading: 0,
+    bank: 0,
+    pitch: 0,
+    speed: 0,
+    turbo: false,
+  }
+}
+
 export function describeShipAppearance(system: GitHubSystem): ShipAppearance {
   return {
     primaryHue: system.starAppearance.technologyHues[0] ?? system.starAppearance.primaryHue,

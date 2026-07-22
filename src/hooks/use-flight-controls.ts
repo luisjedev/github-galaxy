@@ -9,11 +9,17 @@ import {
 import {
   advanceFlight,
   createInitialFlight,
+  createStarReturnFlight,
   idleFlightInput,
   type FlightInput,
   type FlightState,
 } from '../domain/flight'
 import type { GitHubSystem } from '../domain/github-system'
+
+export type TeleportPhase = 'idle' | 'charging' | 'jump'
+
+const TELEPORT_CHARGE_MILLISECONDS = 900
+const TELEPORT_JUMP_MILLISECONDS = 450
 
 const flightKeyByKeyboardKey: Record<string, keyof FlightInput> = {
   w: 'forward',
@@ -51,6 +57,11 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
   const [atmosphereContact, setAtmosphereContact] = useState<AtmosphereContact | null>(null)
   const atmosphereContactRef = useRef<AtmosphereContact | null>(null)
   const flightInput = useRef<FlightInput>({ ...idleFlightInput })
+  const teleportState = useRef<{ phase: TeleportPhase; startedAt: number }>({
+    phase: 'idle',
+    startedAt: 0,
+  })
+  const [teleportPhase, setTeleportPhase] = useState<TeleportPhase>('idle')
   const experienceRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -62,7 +73,17 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (paused || !experienceRef.current?.contains(document.activeElement)) return
-      if (event.key.toLowerCase() === 'e' && !event.repeat) {
+      const key = event.key.toLowerCase()
+      if (key === 'r') {
+        event.preventDefault()
+        if (event.repeat || teleportState.current.phase !== 'idle') return
+        flightInput.current = { ...idleFlightInput }
+        teleportState.current = { phase: 'charging', startedAt: performance.now() }
+        setTeleportPhase('charging')
+        return
+      }
+      if (teleportState.current.phase !== 'idle') return
+      if (key === 'e' && !event.repeat) {
         const destination =
           activeBodyRef.current?.kind === 'planet'
             ? activeBodyRef.current.planet.repository.html_url
@@ -99,6 +120,38 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
       previousFrameTime.current = time
       return
     }
+
+    const teleport = teleportState.current
+    if (teleport.phase === 'charging') {
+      previousFrameTime.current = time
+      if (time - teleport.startedAt >= TELEPORT_CHARGE_MILLISECONDS) {
+        teleportState.current = { phase: 'jump', startedAt: time }
+        setTeleportPhase('jump')
+      }
+      return
+    }
+    if (teleport.phase === 'jump') {
+      previousFrameTime.current = time
+      if (time - teleport.startedAt < TELEPORT_JUMP_MILLISECONDS) return
+
+      const returnedFlight = createStarReturnFlight()
+      teleportState.current = { phase: 'idle', startedAt: 0 }
+      flightInput.current = { ...idleFlightInput }
+      flightState.current = returnedFlight
+      setFlight(returnedFlight)
+      setTeleportPhase('idle')
+      atmosphereContactRef.current = null
+      setAtmosphereContact(null)
+      const returnedActiveBody = selectActiveCelestialBody(
+        system,
+        returnedFlight,
+        simulationElapsedSeconds.current,
+      )
+      activeBodyRef.current = returnedActiveBody
+      setActiveBody(returnedActiveBody)
+      return
+    }
+
     const frameSeconds = (time - previousTime) / 1_000
     const previousElapsedSeconds = simulationElapsedSeconds.current
     const elapsedSeconds = previousElapsedSeconds + frameSeconds
@@ -152,5 +205,6 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
     activeBody,
     atmosphereContact,
     simulationElapsedSeconds,
+    teleportPhase,
   }
 }

@@ -742,6 +742,53 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
+.audio-control {
+  position: absolute;
+  z-index: 9;
+  top: clamp(2rem, 6vw, 4.5rem);
+  right: clamp(14.5rem, 22vw, 19rem);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgb(141 245 223 / 28%);
+  border-radius: 999px;
+  color: #dce4f7;
+  background: rgb(7 9 24 / 78%);
+  cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+}
+
+.audio-control[hidden] {
+  display: none;
+}
+
+.audio-control:hover:not(:disabled),
+.audio-control:focus-visible {
+  border-color: #8df5df;
+  color: #8df5df;
+}
+
+.audio-control:focus-visible {
+  outline: 3px solid #f8cf68;
+  outline-offset: 3px;
+}
+
+.audio-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.audio-control[data-audio-state='muted'] {
+  border-color: rgb(255 180 95 / 42%);
+  color: #ffd8a6;
+}
+
 .flight-hud {
   position: absolute;
   z-index: 6;
@@ -764,6 +811,46 @@ input:focus-visible {
 
 .flight-hud strong {
   color: #8df5df;
+}
+
+.teleport-overlay {
+  position: absolute;
+  z-index: 12;
+  display: grid;
+  inset: 0;
+  align-content: center;
+  justify-items: center;
+  color: #dffdf7;
+  background: radial-gradient(circle, rgb(110 89 224 / 18%), transparent 46%);
+  pointer-events: none;
+  text-align: center;
+}
+
+.teleport-overlay__rings {
+  width: 9rem;
+  height: 9rem;
+  margin-bottom: 1.2rem;
+  border: 2px solid rgb(141 245 223 / 75%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1.6rem rgb(169 152 255 / 13%),
+    0 0 0 3.2rem rgb(141 245 223 / 7%),
+    0 0 50px rgb(141 245 223 / 34%);
+  animation: teleport-charge 0.9s ease-in infinite;
+}
+
+.teleport-overlay--jump {
+  background: radial-gradient(circle, rgb(223 253 247 / 68%), rgb(110 89 224 / 24%) 18%, transparent 58%);
+  animation: teleport-flash 0.45s ease-out both;
+}
+
+.teleport-overlay--jump .teleport-overlay__rings {
+  animation: teleport-jump 0.45s ease-in both;
+}
+
+.teleport-overlay > strong {
+  font-size: clamp(0.85rem, 2vw, 1.2rem);
+  letter-spacing: 0.06em;
 }
 
 .flight-help {
@@ -864,6 +951,33 @@ input:focus-visible {
   color: #737c99;
   font-family: 'Space Mono', monospace;
   font-size: 0.68rem;
+}
+
+@keyframes teleport-charge {
+  from {
+    opacity: 0.45;
+    transform: scale(0.72) rotate(0deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+@keyframes teleport-jump {
+  to {
+    opacity: 0;
+    transform: scale(5.5) rotate(80deg);
+  }
+}
+
+@keyframes teleport-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.18;
+  }
 }
 
 @keyframes spin {

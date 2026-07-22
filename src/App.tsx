@@ -27,6 +27,11 @@ import {
   type CelestialMarkerState,
 } from './components/GalaxyScene'
 import { useFlightControls } from './hooks/use-flight-controls'
+import {
+  useProceduralAudio,
+  type AudioExperienceState,
+} from './hooks/use-procedural-audio'
+import type { ReactiveAudioState } from './platform/procedural-audio'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
 import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
@@ -407,14 +412,30 @@ function trapPauseFocus(event: ReactKeyboardEvent<HTMLElement>) {
   actions[shouldWrapBackward ? actions.length - 1 : 0].focus()
 }
 
+const audioPresentation: Record<
+  AudioExperienceState,
+  { action: string; icon: string; status: string }
+> = {
+  waiting: { action: 'Activar audio', icon: '◖×', status: 'Activar audio' },
+  active: { action: 'Silenciar audio', icon: '◖))', status: 'Audio activo' },
+  muted: { action: 'Activar audio', icon: '◖×', status: 'Audio silenciado' },
+  unavailable: { action: 'Audio no disponible', icon: '◖×', status: 'Audio no disponible' },
+}
+
 function Exploration({
   system,
   paused,
+  audioState,
+  onAudioToggle,
+  onAudioUpdate,
   onTogglePause,
   onReturnToMenu,
 }: {
   system: GitHubSystem
   paused: boolean
+  audioState: AudioExperienceState
+  onAudioToggle: () => void
+  onAudioUpdate: (state: ReactiveAudioState) => void
   onTogglePause: () => void
   onReturnToMenu: () => void
 }) {
@@ -428,11 +449,24 @@ function Exploration({
     activeBody,
     atmosphereContact,
     simulationElapsedSeconds,
+    teleportPhase,
   } = useFlightControls(system, paused)
   const shipAppearance = describeShipAppearance(system)
   const [orientationMarkers, setOrientationMarkers] = useState<CelestialMarkerState[]>([])
   const starMarker = orientationMarkers.find((marker) => marker.key === 'star')
   const starGuide = placeStarGuide(starMarker, window.innerWidth / window.innerHeight)
+
+  useEffect(() => {
+    onAudioUpdate({
+      speed: flight.speed,
+      turbo: flight.turbo,
+      proximity: Boolean(activeBody),
+      paused,
+      teleportPhase: paused ? 'idle' : teleportPhase,
+    })
+  }, [activeBody, audioState, flight.speed, flight.turbo, onAudioUpdate, paused, teleportPhase])
+
+  const currentAudioPresentation = audioPresentation[audioState]
 
   return (
     <main
@@ -565,6 +599,49 @@ function Exploration({
         </aside>
       ) : null}
 
+      <button
+        type="button"
+        className="audio-control"
+        data-testid="audio-control"
+        data-audio-state={audioState}
+        aria-label={currentAudioPresentation.action}
+        aria-pressed={audioState === 'muted'}
+        disabled={audioState === 'unavailable'}
+        hidden={paused}
+        onClick={onAudioToggle}
+      >
+        <span aria-hidden="true">{currentAudioPresentation.icon}</span>
+        {currentAudioPresentation.status}
+      </button>
+
+      <output
+        className="scene-observability"
+        data-testid="audio-reactivity"
+        data-engine-state={Math.abs(flight.speed) > 0.05 && !paused && teleportPhase === 'idle' ? 'active' : 'idle'}
+        data-turbo-state={flight.turbo && !paused && teleportPhase === 'idle' ? 'active' : 'idle'}
+        data-proximity-state={activeBody && !paused && teleportPhase === 'idle' ? 'active' : 'idle'}
+        data-audio-cue={
+          audioState === 'muted'
+            ? 'muted'
+            : audioState !== 'active'
+              ? 'silent'
+              : teleportPhase === 'charging'
+                ? 'teleport-charge'
+                : teleportPhase === 'jump'
+                  ? 'teleport-jump'
+                  : flight.turbo
+                    ? 'turbo'
+                    : activeBody
+                      ? 'proximity'
+                      : Math.abs(flight.speed) > 0.05
+                        ? 'engine'
+                        : 'ambient'
+        }
+        aria-label="Estado del paisaje sonoro"
+      >
+        Audio procedural reactivo
+      </output>
+
       <output
         className="flight-hud"
         data-testid="flight-state"
@@ -583,6 +660,26 @@ function Exploration({
         <span>Altitud {Math.round(flight.altitude)}</span>
         <strong>{flight.turbo ? 'Turbo activo' : 'Impulso normal'}</strong>
       </output>
+
+      {teleportPhase !== 'idle' ? (
+        <aside
+          className={`teleport-overlay teleport-overlay--${teleportPhase}`}
+          role="status"
+          aria-label="Secuencia de teletransporte"
+          aria-live="polite"
+          data-teleport-phase={teleportPhase}
+        >
+          <span className="teleport-overlay__rings" aria-hidden="true" />
+          <p className="eyebrow">
+            {teleportPhase === 'charging' ? 'Carga de teletransporte' : 'Salto en curso'}
+          </p>
+          <strong>
+            {teleportPhase === 'charging'
+              ? 'Estabilizando coordenadas de regreso…'
+              : 'Atravesando el corredor estelar…'}
+          </strong>
+        </aside>
+      ) : null}
 
       <details className="flight-help" open>
         <summary>Guía de vuelo</summary>
@@ -611,6 +708,14 @@ function Exploration({
             <div className="pause-actions">
               <button type="button" onClick={onTogglePause} autoFocus>
                 Continuar explorando
+              </button>
+              <button
+                type="button"
+                onClick={onAudioToggle}
+                disabled={audioState === 'unavailable'}
+                aria-pressed={audioState === 'muted'}
+              >
+                {currentAudioPresentation.action}
               </button>
               <button type="button" onClick={onReturnToMenu}>
                 Volver al menú principal
@@ -733,7 +838,19 @@ function initialAppState(): AppState {
     : { name: 'loading', username, stage: 'profile' }
 }
 
-function AppView({ initialState = initialAppState() }: { initialState?: AppState }) {
+function AppView({
+  initialState = initialAppState(),
+  audioState,
+  onAudioActivation,
+  onAudioToggle,
+  onAudioUpdate,
+}: {
+  initialState?: AppState
+  audioState: AudioExperienceState
+  onAudioActivation: () => void
+  onAudioToggle: () => void
+  onAudioUpdate: (state: ReactiveAudioState) => void
+}) {
   const [state, dispatch] = useReducer(transitionAppState, initialState)
   const loadingUsername = state.name === 'loading' ? state.username : null
 
@@ -772,6 +889,7 @@ function AppView({ initialState = initialAppState() }: { initialState?: AppState
       return (
         <Menu
           onExplore={(username) => {
+            onAudioActivation()
             updateUserQuery(username)
             dispatch({ type: 'SUBMIT_USER', username })
           }}
@@ -785,6 +903,9 @@ function AppView({ initialState = initialAppState() }: { initialState?: AppState
         <Exploration
           system={state.system}
           paused={state.name === 'pause'}
+          audioState={audioState}
+          onAudioToggle={onAudioToggle}
+          onAudioUpdate={onAudioUpdate}
           onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
           onReturnToMenu={returnToMenu}
         />
@@ -804,6 +925,7 @@ export default function App() {
   const [compatibility] = useState<Compatibility>(() =>
     evaluateCompatibility(readBrowserCapabilities()),
   )
+  const audio = useProceduralAudio()
 
   return (
     <div className="app-shell">
@@ -812,7 +934,12 @@ export default function App() {
       {compatibility.status === 'unsupported' ? (
         <CompatibilityNotice reason={compatibility.reason} />
       ) : (
-        <AppView />
+        <AppView
+          audioState={audio.state}
+          onAudioActivation={() => void audio.activate()}
+          onAudioToggle={audio.toggleMuted}
+          onAudioUpdate={audio.update}
+        />
       )}
     </div>
   )
