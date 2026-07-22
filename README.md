@@ -15,7 +15,13 @@ pnpm install
 pnpm dev
 ```
 
-Vite mostrará la URL local de desarrollo en la terminal.
+Vite mostrará la URL local de desarrollo en la terminal. Puedes abrir directamente un perfil con `/?user=<usuario>`; la aplicación consulta la REST API pública de GitHub desde el navegador sin autenticación ni token.
+
+Las respuestas válidas se guardan en `localStorage` durante 15 minutos. El TTL se configura en milisegundos mediante `VITE_GITHUB_CACHE_TTL_MS`:
+
+```bash
+VITE_GITHUB_CACHE_TTL_MS=300000 pnpm dev
+```
 
 ## Verificaciones
 

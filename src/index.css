@@ -412,6 +412,82 @@ input:focus-visible {
   background: rgb(5 7 19 / 70%);
 }
 
+.system-layout {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.system-summary {
+  position: absolute;
+  z-index: 1;
+  top: clamp(2rem, 7vw, 5rem);
+  left: clamp(2rem, 7vw, 6rem);
+  max-width: 32rem;
+}
+
+.system-summary h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 5rem);
+  letter-spacing: -0.06em;
+}
+
+.system-summary > p:not(.eyebrow) {
+  color: #aeb5cf;
+}
+
+.procedural-star {
+  position: relative;
+  display: grid;
+  width: clamp(10rem, 24vw, 19rem);
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 31%, hsl(var(--star-hue) 100% 94%), transparent 9%),
+    radial-gradient(circle at 42% 40%, hsl(var(--star-hue) 94% 74%), hsl(var(--star-hue) 86% 48%) var(--star-flare), hsl(var(--star-hue) 78% 25%));
+  box-shadow:
+    0 0 2rem hsl(var(--star-hue) 95% 67% / 85%),
+    0 0 7rem hsl(var(--star-hue) 95% 57% / 48%),
+    0 0 16rem hsl(var(--star-hue) 90% 50% / 22%);
+}
+
+.procedural-star::before,
+.procedural-star::after {
+  position: absolute;
+  border: 1px solid hsl(var(--star-hue) 95% 80% / 20%);
+  border-radius: 50%;
+  content: '';
+}
+
+.procedural-star::before {
+  inset: -18%;
+  animation: pulse-star 5s ease-in-out infinite;
+}
+
+.procedural-star::after {
+  inset: -38%;
+  border-style: dashed;
+  animation: spin 30s linear infinite;
+}
+
+.procedural-star span {
+  width: 72%;
+  height: 72%;
+  border-radius: 42% 58% 47% 53%;
+  background: hsl(var(--star-hue) 100% 90% / 17%);
+  filter: blur(2px);
+  transform: rotate(calc(var(--star-hue) * 1deg));
+}
+
+@keyframes pulse-star {
+  50% {
+    opacity: 0.4;
+    transform: scale(1.08);
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

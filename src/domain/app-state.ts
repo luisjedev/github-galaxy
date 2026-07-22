@@ -1,13 +1,18 @@
+import type { GitHubSystem } from './github-system'
+
+export type LoadingStage = 'profile' | 'repositories' | 'system'
+
 export type AppState =
   | { name: 'menu' }
-  | { name: 'loading'; username: string }
-  | { name: 'exploration'; username: string }
-  | { name: 'pause'; username: string }
+  | { name: 'loading'; username: string; stage: LoadingStage }
+  | { name: 'exploration'; username: string; system: GitHubSystem }
+  | { name: 'pause'; username: string; system: GitHubSystem }
   | { name: 'error'; message: string }
 
 export type AppEvent =
   | { type: 'SUBMIT_USER'; username: string }
-  | { type: 'SYSTEM_READY' }
+  | { type: 'LOAD_PROGRESS'; stage: LoadingStage }
+  | { type: 'SYSTEM_READY'; system: GitHubSystem }
   | { type: 'TOGGLE_PAUSE' }
   | { type: 'FAIL'; message: string }
   | { type: 'RETURN_TO_MENU' }
@@ -15,17 +20,19 @@ export type AppEvent =
 export function transitionAppState(state: AppState, event: AppEvent): AppState {
   switch (event.type) {
     case 'SUBMIT_USER':
-      return { name: 'loading', username: event.username }
+      return { name: 'loading', username: event.username, stage: 'profile' }
+    case 'LOAD_PROGRESS':
+      return state.name === 'loading' ? { ...state, stage: event.stage } : state
     case 'SYSTEM_READY':
       return state.name === 'loading'
-        ? { name: 'exploration', username: state.username }
+        ? { name: 'exploration', username: event.system.profile.login, system: event.system }
         : state
     case 'TOGGLE_PAUSE':
       if (state.name === 'exploration') {
-        return { name: 'pause', username: state.username }
+        return { name: 'pause', username: state.username, system: state.system }
       }
       if (state.name === 'pause') {
-        return { name: 'exploration', username: state.username }
+        return { name: 'exploration', username: state.username, system: state.system }
       }
       return state
     case 'FAIL':

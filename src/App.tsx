@@ -1,7 +1,9 @@
-import { useReducer, useState, type FormEvent } from 'react'
-import { transitionAppState, type AppState } from './domain/app-state'
+import { useEffect, useReducer, useState, type CSSProperties, type FormEvent } from 'react'
+import { transitionAppState, type AppState, type LoadingStage } from './domain/app-state'
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
+import type { GitHubSystem } from './domain/github-system'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
+import { loadGitHubSystem } from './platform/github-client'
 
 const controls = [
   ['W / S', 'Avanzar · frenar'],
@@ -123,7 +125,13 @@ function Menu({ onExplore }: { onExplore: (username: string) => void }) {
   )
 }
 
-function Loading({ username }: { username: string }) {
+const loadingMessages: Record<LoadingStage, string> = {
+  profile: 'Consultando el perfil público',
+  repositories: 'Recopilando los proyectos públicos',
+  system: 'Generando una estrella estable',
+}
+
+function Loading({ username, stage }: { username: string; stage: LoadingStage }) {
   return (
     <main className="centered-layout" data-app-state="loading">
       <section className="glass-panel loading-panel" role="status" aria-live="polite">
@@ -133,16 +141,39 @@ function Loading({ username }: { username: string }) {
         </div>
         <p className="eyebrow">Trazando órbitas</p>
         <h1>Preparando el sistema de {username}</h1>
-        <p>Buscando estrellas y proyectos públicos…</p>
+        <p>
+          {loadingMessages[stage]} de {username}…
+        </p>
       </section>
     </main>
   )
 }
 
-function Exploration({ username }: { username: string }) {
+function Exploration({ system }: { system: GitHubSystem }) {
+  const { profile, repositories, starSeed } = system
+  const ownRepositories = repositories.filter((repository) => !repository.fork)
+  const starStyle = {
+    '--star-hue': `${starSeed % 360}`,
+    '--star-flare': `${36 + (starSeed % 24)}%`,
+  } as CSSProperties
+
   return (
-    <main className="overlay-state" data-app-state="exploration">
-      <p>Explorando el sistema de {username}</p>
+    <main className="system-layout" data-app-state="exploration">
+      <section className="system-summary">
+        <p className="eyebrow">Sistema listo para explorar</p>
+        <h1>Sistema de {profile.login}</h1>
+        <p>{ownRepositories.length} proyectos públicos encontrados</p>
+        {ownRepositories.length === 0 ? <p>Una estrella solitaria espera tu visita.</p> : null}
+      </section>
+      <div
+        className="procedural-star"
+        style={starStyle}
+        role="img"
+        aria-label={`Estrella de ${profile.login}`}
+        data-star-seed={starSeed}
+      >
+        <span aria-hidden="true" />
+      </div>
     </main>
   )
 }
@@ -169,20 +200,60 @@ function ErrorState({ message }: { message: string }) {
   )
 }
 
-function AppView({ initialState = { name: 'menu' } }: { initialState?: AppState }) {
+function updateUserQuery(username: string, mode: 'push' | 'replace' = 'push') {
+  const url = new URL(window.location.href)
+  url.searchParams.set('user', username)
+  window.history[mode === 'push' ? 'pushState' : 'replaceState']({}, '', url)
+}
+
+function initialAppState(): AppState {
+  const username = new URL(window.location.href).searchParams.get('user')?.trim()
+  return username ? { name: 'loading', username, stage: 'profile' } : { name: 'menu' }
+}
+
+function AppView({ initialState = initialAppState() }: { initialState?: AppState }) {
   const [state, dispatch] = useReducer(transitionAppState, initialState)
+  const loadingUsername = state.name === 'loading' ? state.username : null
+
+  useEffect(() => {
+    if (!loadingUsername) return
+
+    let isActive = true
+    void loadGitHubSystem(loadingUsername, {
+      onStage: (stage) => {
+        if (isActive) dispatch({ type: 'LOAD_PROGRESS', stage })
+      },
+    })
+      .then((system) => {
+        if (!isActive) return
+        updateUserQuery(system.profile.login, 'replace')
+        dispatch({ type: 'SYSTEM_READY', system })
+      })
+      .catch(() => {
+        if (isActive) {
+          dispatch({ type: 'FAIL', message: 'GitHub no ha podido preparar este sistema' })
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [loadingUsername])
 
   switch (state.name) {
     case 'menu':
       return (
         <Menu
-          onExplore={(username) => dispatch({ type: 'SUBMIT_USER', username })}
+          onExplore={(username) => {
+            updateUserQuery(username)
+            dispatch({ type: 'SUBMIT_USER', username })
+          }}
         />
       )
     case 'loading':
-      return <Loading username={state.username} />
+      return <Loading username={state.username} stage={state.stage} />
     case 'exploration':
-      return <Exploration username={state.username} />
+      return <Exploration system={state.system} />
     case 'pause':
       return <Pause username={state.username} />
     case 'error':
