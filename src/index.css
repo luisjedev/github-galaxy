@@ -257,6 +257,42 @@ input:focus-visible {
   transform: translateY(-1px);
 }
 
+.explore-form__alternative {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.15rem;
+}
+
+.explore-form__alternative::before,
+.explore-form__alternative::after {
+  height: 1px;
+  background: rgb(169 149 255 / 16%);
+  content: '';
+}
+
+.explore-form__alternative > span {
+  color: #687089;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.explore-form .random-explore {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  border: 1px solid rgb(141 245 223 / 28%);
+  color: #dffdf7;
+  background: rgb(52 48 105 / 24%);
+  box-shadow: none;
+}
+
+.explore-form .random-explore:hover {
+  border-color: rgb(141 245 223 / 55%);
+  background: rgb(68 62 134 / 34%);
+}
+
 .form-hint,
 .form-error {
   margin: 0.65rem 0 0 1rem;

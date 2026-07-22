@@ -7,17 +7,19 @@ export interface AppError {
   title: string
   message: string
   retryable?: boolean
+  request?: 'random'
 }
 
 export type AppState =
   | { name: 'menu' }
-  | { name: 'loading'; username: string; stage: LoadingStage }
+  | { name: 'loading'; username: string; stage: LoadingStage; random?: boolean }
   | { name: 'exploration'; username: string; system: GitHubSystem }
   | { name: 'pause'; username: string; system: GitHubSystem }
   | { name: 'error'; error: AppError }
 
 export type AppEvent =
   | { type: 'SUBMIT_USER'; username: string }
+  | { type: 'SUBMIT_RANDOM' }
   | { type: 'LOAD_PROGRESS'; stage: LoadingStage }
   | { type: 'SYSTEM_READY'; system: GitHubSystem }
   | { type: 'REPLACE_SYSTEM'; system: GitHubSystem }
@@ -29,6 +31,8 @@ export function transitionAppState(state: AppState, event: AppEvent): AppState {
   switch (event.type) {
     case 'SUBMIT_USER':
       return { name: 'loading', username: event.username, stage: 'profile' }
+    case 'SUBMIT_RANDOM':
+      return { name: 'loading', username: '', stage: 'profile', random: true }
     case 'LOAD_PROGRESS':
       return state.name === 'loading' ? { ...state, stage: event.stage } : state
     case 'SYSTEM_READY':

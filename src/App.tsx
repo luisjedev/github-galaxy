@@ -36,9 +36,16 @@ import type { ReactiveAudioState } from './platform/procedural-audio'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
 import { readVisualSettings } from './platform/visual-settings'
-import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
+import {
+  GitHubRequestError,
+  loadGitHubSystem,
+  loadRandomGitHubSystem,
+} from './platform/github-client'
 import { generateSystemOrbitalVisual } from './domain/orbital-generation'
-import { calculateSystemExitRadius } from './domain/wormhole'
+import {
+  calculateSystemExitRadius,
+  DestinationSelectionError,
+} from './domain/wormhole'
 import {
   isWormholeTravelPhase,
   useWormholeTravel,
@@ -96,7 +103,13 @@ function CompatibilityNotice({ reason }: { reason: 'mobile' | 'webgl' }) {
   )
 }
 
-function Menu({ onExplore }: { onExplore: (username: string) => void }) {
+function Menu({
+  onExplore,
+  onExploreRandom,
+}: {
+  onExplore: (username: string) => void
+  onExploreRandom: () => void
+}) {
   const [username, setUsername] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -115,18 +128,19 @@ function Menu({ onExplore }: { onExplore: (username: string) => void }) {
         <div className="hero__copy">
           <p className="eyebrow">Exploración procedural de GitHub</p>
           <h1>
-            Convierte proyectos
+            Pilota tu nave.
             <br />
-            en <span>mundos.</span>
+            Descubre <span>sistemas.</span>
           </h1>
           <p className="hero__description">
-            Escribe un usuario de GitHub y contempla sus repositorios públicos como un sistema solar
-            que podrás pilotar y descubrir.
+            Escribe tu usuario de GitHub para descubrir tu sistema solar y pilota tu nave entre
+            repositorios convertidos en mundos. Después, viaja a los sistemas de otros usuarios o
+            despega directamente hacia uno aleatorio.
           </p>
         </div>
 
         <form className="explore-form" onSubmit={submit}>
-          <label htmlFor="github-username">Usuario de GitHub</label>
+          <label htmlFor="github-username">Tu usuario de GitHub</label>
           <div className="explore-form__controls">
             <span className="prompt" aria-hidden="true">
               @
@@ -156,9 +170,15 @@ function Menu({ onExplore }: { onExplore: (username: string) => void }) {
             </p>
           ) : (
             <p className="form-hint" id="username-hint">
-              Pulsa Enter para despegar
+              Pulsa Enter para despegar hacia tu sistema
             </p>
           )}
+          <div className="explore-form__alternative">
+            <span aria-hidden="true">o</span>
+            <button type="button" className="random-explore" onClick={onExploreRandom}>
+              Visitar un sistema aleatorio <span aria-hidden="true">↝</span>
+            </button>
+          </div>
           <p className="api-notice">
             Usamos la API pública de GitHub sin autenticación. Tiene un límite de solicitudes y nunca
             te pediremos un token.
@@ -189,18 +209,30 @@ const loadingMessages: Record<LoadingStage, string> = {
   system: 'Generando una estrella estable',
 }
 
-function Loading({ username, stage }: { username: string; stage: LoadingStage }) {
+function Loading({
+  username,
+  stage,
+  random = false,
+}: {
+  username: string
+  stage: LoadingStage
+  random?: boolean
+}) {
   return (
-    <main className="centered-layout" data-app-state="loading">
+    <main className="centered-layout" data-app-state="loading" data-loading-mode={random ? 'random' : 'user'}>
       <section className="glass-panel loading-panel" role="status" aria-live="polite">
         <Brand />
         <div className="loader" aria-hidden="true">
           <span />
         </div>
         <p className="eyebrow">Trazando órbitas</p>
-        <h1>Preparando el sistema de {username}</h1>
+        <h1>
+          {random ? 'Buscando un sistema aleatorio' : `Preparando el sistema de ${username}`}
+        </h1>
         <p>
-          {loadingMessages[stage]} de {username}…
+          {random
+            ? 'Consultando GitHub para encontrar un nuevo destino…'
+            : `${loadingMessages[stage]} de ${username}…`}
         </p>
       </section>
     </main>
@@ -948,6 +980,35 @@ function describeLoadError(username: string, error: unknown): AppError {
   }
 }
 
+function describeRandomLoadError(error: unknown): AppError {
+  if (error instanceof DestinationSelectionError) {
+    return {
+      username: '',
+      request: 'random',
+      title: 'No hay un sistema aleatorio disponible ahora mismo',
+      message:
+        error.reason === 'none'
+          ? 'GitHub no ha encontrado usuarios públicos que cumplan los requisitos.'
+          : 'No hemos podido confirmar un destino válido tras varios intentos.',
+    }
+  }
+
+  if (error instanceof GitHubRequestError && error.kind === 'search-rate-limit') {
+    return {
+      username: '',
+      request: 'random',
+      title: 'GitHub ha limitado temporalmente la búsqueda',
+      message: 'Espera unos minutos antes de volver a buscar un sistema aleatorio.',
+    }
+  }
+
+  return {
+    ...describeLoadError('un sistema aleatorio', error),
+    username: '',
+    request: 'random',
+  }
+}
+
 function updateUserQuery(username: string, mode: 'push' | 'replace' = 'push') {
   const url = new URL(window.location.href)
   url.searchParams.set('user', username)
@@ -994,31 +1055,40 @@ function AppView({
   const [state, dispatch] = useReducer(transitionAppState, initialState)
   const [recentLogins, setRecentLogins] = useState<string[]>([])
   const loadingUsername = state.name === 'loading' ? state.username : null
+  const isRandomLoading = state.name === 'loading' && state.random === true
 
   useEffect(() => {
-    if (!loadingUsername) return
+    if (!isRandomLoading && !loadingUsername) return
 
     let isActive = true
-    void loadGitHubSystem(loadingUsername, {
-      onStage: (stage) => {
-        if (isActive) dispatch({ type: 'LOAD_PROGRESS', stage })
-      },
-    })
+    const request = isRandomLoading
+      ? loadRandomGitHubSystem({ currentLogin: '', recentLogins: [] })
+      : loadGitHubSystem(loadingUsername!, {
+          onStage: (stage) => {
+            if (isActive) dispatch({ type: 'LOAD_PROGRESS', stage })
+          },
+        })
+
+    void request
       .then((system) => {
         if (!isActive) return
         updateUserQuery(system.profile.login, 'replace')
         dispatch({ type: 'SYSTEM_READY', system })
       })
       .catch((error: unknown) => {
-        if (isActive) {
-          dispatch({ type: 'FAIL', error: describeLoadError(loadingUsername, error) })
-        }
+        if (!isActive) return
+        dispatch({
+          type: 'FAIL',
+          error: isRandomLoading
+            ? describeRandomLoadError(error)
+            : describeLoadError(loadingUsername!, error),
+        })
       })
 
     return () => {
       isActive = false
     }
-  }, [loadingUsername])
+  }, [isRandomLoading, loadingUsername])
 
   const returnToMenu = () => {
     clearUserQuery()
@@ -1034,10 +1104,20 @@ function AppView({
             updateUserQuery(username)
             dispatch({ type: 'SUBMIT_USER', username })
           }}
+          onExploreRandom={() => {
+            onAudioActivation()
+            dispatch({ type: 'SUBMIT_RANDOM' })
+          }}
         />
       )
     case 'loading':
-      return <Loading username={state.username} stage={state.stage} />
+      return (
+        <Loading
+          username={state.username}
+          stage={state.stage}
+          random={state.random}
+        />
+      )
     case 'exploration':
     case 'pause':
       return (
@@ -1071,7 +1151,13 @@ function AppView({
       return (
         <ErrorState
           error={state.error}
-          onRetry={() => dispatch({ type: 'SUBMIT_USER', username: state.error.username })}
+          onRetry={() =>
+            dispatch(
+              state.error.request === 'random'
+                ? { type: 'SUBMIT_RANDOM' }
+                : { type: 'SUBMIT_USER', username: state.error.username },
+            )
+          }
           onReturnToMenu={returnToMenu}
         />
       )

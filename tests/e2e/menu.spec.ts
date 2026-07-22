@@ -4,8 +4,11 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: 'GitGalaxy', exact: true })).toBeVisible()
-  await expect(page.getByLabel('Usuario de GitHub')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pilota tu nave. Descubre sistemas.' })).toBeVisible()
+  await expect(page.getByLabel('Tu usuario de GitHub')).toBeVisible()
+  await expect(page.getByText(/viaja a los sistemas de otros usuarios/i)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Explorar sistema' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Visitar un sistema aleatorio' })).toBeVisible()
   await expect(page.getByText(/experiencia de escritorio con teclado/i)).toBeVisible()
   await expect(page.getByText('W / S', { exact: true })).toBeVisible()
   await expect(page.getByText('A / D')).toBeVisible()
@@ -34,4 +37,46 @@ test('permite continuar con el botón principal', async ({ page }) => {
   await page.getByRole('button', { name: 'Explorar sistema' }).click()
 
   await expect(page.getByRole('status')).toContainText('Preparando el sistema de torvalds')
+})
+
+test('permite despegar directamente hacia un sistema aleatorio', async ({ page }) => {
+  await page.route('https://api.github.com/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/search/users') {
+      await route.fulfill({
+        json: {
+          total_count: 1,
+          incomplete_results: false,
+          items: [{ login: 'random-pilot' }],
+        },
+      })
+      return
+    }
+
+    await route.fulfill({
+      json: url.pathname.endsWith('/repos')
+        ? []
+        : {
+            id: 42,
+            login: 'random-pilot',
+            name: 'Random Pilot',
+            avatar_url: 'https://avatars.example/random-pilot.png',
+            html_url: 'https://github.com/random-pilot',
+            bio: null,
+            followers: 7,
+            public_repos: 15,
+          },
+      headers: { 'access-control-expose-headers': 'Link' },
+    })
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Visitar un sistema aleatorio' }).click()
+
+  await expect(page.getByRole('status')).toContainText('Buscando un sistema aleatorio')
+  await expect(page.locator('[data-app-state="exploration"]')).toHaveAttribute(
+    'data-origin-user',
+    'random-pilot',
+  )
+  await expect(page).toHaveURL(/\?user=random-pilot$/)
 })
