@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   advanceFlight,
   createInitialFlight,
+  createRespawnFlight,
   idleFlightInput,
   NORMAL_FLIGHT_SPEED,
   REVERSE_FLIGHT_SPEED,
@@ -105,6 +106,15 @@ describe('createInitialFlight', () => {
       heading: 0,
     })
   })
+
+  test('usa exactamente el punto de entrada como destino de respawn', () => {
+    const system = createGitHubSystem(
+      profile,
+      Array.from({ length: 20 }, (_, index) => repository(index + 1)),
+    )
+
+    expect(createRespawnFlight(system)).toEqual(createInitialFlight(system).state)
+  })
 })
 
 describe('advanceFlight', () => {
@@ -127,7 +137,7 @@ describe('advanceFlight', () => {
     expect(tiltingUp.pitch).toBeLessThan(0)
     expect(tiltingDown).toMatchObject({ x: 0, z: 0, altitude: 0, speed: 0 })
     expect(tiltingDown.pitch).toBeGreaterThan(0)
-    expect(advanceRepeatedly(idleState, input({ ascend: true })).pitch).toBeCloseTo(-0.6)
+    expect(advanceRepeatedly(idleState, input({ ascend: true })).pitch).toBeCloseTo(-0.3)
 
     const banked = advanceRepeatedly(idleState, input({ left: true }), 10)
     const level = advanceRepeatedly(banked, input({}))

@@ -19,7 +19,8 @@ function audioContextConstructor(): AudioContextConstructor | null {
 
 function smoothlySet(parameter: AudioParam, value: number, time: number) {
   parameter.cancelScheduledValues(time)
-  parameter.setTargetAtTime(value, time, 0.045)
+  // A relaxed fade avoids clicks and makes throttle changes feel less abrasive.
+  parameter.setTargetAtTime(value, time, 0.12)
 }
 
 function connectOscillator(
@@ -36,6 +37,30 @@ function connectOscillator(
   return oscillator
 }
 
+function connectLoopingNoise(context: AudioContext, destination: AudioNode) {
+  const sampleRate = context.sampleRate || 44_100
+  const frameCount = sampleRate * 2
+  const buffer = context.createBuffer(1, frameCount, sampleRate)
+  const samples = buffer.getChannelData(0)
+  let previousSample = 0
+  let seed = 0x8f7011ee
+
+  // Deterministic, lightly smoothed noise produces a soft rush instead of a
+  // piercing pitched tone when turbo is held down.
+  for (let index = 0; index < samples.length; index += 1) {
+    seed = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    const whiteNoise = (((seed ^ (seed >>> 14)) >>> 0) / 4_294_967_296) * 2 - 1
+    previousSample = previousSample * 0.82 + whiteNoise * 0.18
+    samples[index] = previousSample
+  }
+
+  const source = context.createBufferSource()
+  source.buffer = buffer
+  source.loop = true
+  source.connect(destination)
+  source.start()
+}
+
 /**
  * A small, entirely synthesized soundtrack. The graph is created lazily so merely
  * loading a shared URL never attempts playback before a visitor interaction.
@@ -50,6 +75,7 @@ export class ProceduralAudioEngine {
   private teleportGain: GainNode | null = null
   private teleportOscillator: OscillatorNode | null = null
   private muted = false
+  private proximityActive = false
   private teleportPhase: TeleportAudioPhase = 'idle'
 
   async activate(): Promise<void> {
@@ -73,11 +99,15 @@ export class ProceduralAudioEngine {
     const now = context.currentTime
     const movement = Math.min(1, Math.abs(state.speed) / 4)
     const shouldPlayReactiveAudio = !state.paused && state.teleportPhase === 'idle'
-    smoothlySet(this.engineGain.gain, shouldPlayReactiveAudio ? 0.018 + movement * 0.055 : 0, now)
-    smoothlySet(this.engineOscillator.frequency, 62 + movement * 94, now)
-    smoothlySet(this.turboGain.gain, shouldPlayReactiveAudio && state.turbo ? 0.055 : 0, now)
-    // Kept deliberately quiet so the information card remains the primary proximity signal.
-    smoothlySet(this.proximityGain.gain, shouldPlayReactiveAudio && state.proximity ? 0.016 : 0, now)
+    const engineLevel = movement > 0.01 ? 0.004 + movement * 0.026 : 0.001
+    smoothlySet(this.engineGain.gain, shouldPlayReactiveAudio ? engineLevel : 0, now)
+    smoothlySet(this.engineOscillator.frequency, 46 + movement * 42, now)
+    smoothlySet(this.turboGain.gain, shouldPlayReactiveAudio && state.turbo ? 0.026 : 0, now)
+
+    const proximityActive = shouldPlayReactiveAudio && state.proximity
+    if (proximityActive !== this.proximityActive) {
+      this.setProximityActive(proximityActive)
+    }
 
     if (state.teleportPhase !== this.teleportPhase) {
       this.setTeleportPhase(state.teleportPhase)
@@ -94,48 +124,37 @@ export class ProceduralAudioEngine {
     master.connect(context.destination)
 
     const ambientGain = context.createGain()
-    ambientGain.gain.value = 0.025
+    ambientGain.gain.value = 0.007
     ambientGain.connect(master)
-    connectOscillator(context, ambientGain, 'sine', 55)
-    connectOscillator(context, ambientGain, 'sine', 82.41)
-    const ambientFifth = connectOscillator(context, ambientGain, 'triangle', 123.47)
-    ambientFifth.detune.value = -7
+    connectOscillator(context, ambientGain, 'sine', 43.65)
+    const ambientFifth = connectOscillator(context, ambientGain, 'sine', 65.41)
+    ambientFifth.detune.value = -5
 
     const engineGain = context.createGain()
     engineGain.gain.value = 0
     const engineFilter = context.createBiquadFilter()
     engineFilter.type = 'lowpass'
-    engineFilter.frequency.value = 420
-    engineFilter.Q.value = 1.4
+    engineFilter.frequency.value = 210
+    engineFilter.Q.value = 0.45
     engineGain.connect(engineFilter)
     engineFilter.connect(master)
-    const engineOscillator = connectOscillator(context, engineGain, 'sawtooth', 62)
+    const engineOscillator = connectOscillator(context, engineGain, 'triangle', 46)
 
     const turboGain = context.createGain()
     turboGain.gain.value = 0
     const turboFilter = context.createBiquadFilter()
     turboFilter.type = 'bandpass'
-    turboFilter.frequency.value = 760
-    turboFilter.Q.value = 0.8
+    turboFilter.frequency.value = 240
+    turboFilter.Q.value = 0.55
     turboGain.connect(turboFilter)
     turboFilter.connect(master)
-    connectOscillator(context, turboGain, 'square', 118)
+    connectLoopingNoise(context, turboGain)
 
     const proximityGain = context.createGain()
     proximityGain.gain.value = 0
     proximityGain.connect(master)
-    const proximityPulseGain = context.createGain()
-    proximityPulseGain.gain.value = 0.65
-    proximityPulseGain.connect(proximityGain)
-    connectOscillator(context, proximityPulseGain, 'sine', 523.25)
-    const proximityPulse = context.createOscillator()
-    const proximityPulseDepth = context.createGain()
-    proximityPulse.type = 'sine'
-    proximityPulse.frequency.value = 1.6
-    proximityPulseDepth.gain.value = 0.3
-    proximityPulse.connect(proximityPulseDepth)
-    proximityPulseDepth.connect(proximityPulseGain.gain)
-    proximityPulse.start()
+    // A single soft cue on arrival replaces the former continuous proximity alarm.
+    connectOscillator(context, proximityGain, 'sine', 220)
 
     const teleportGain = context.createGain()
     teleportGain.gain.value = 0
@@ -154,7 +173,26 @@ export class ProceduralAudioEngine {
 
   private applyMasterLevel() {
     if (!this.context || !this.masterGain) return
-    smoothlySet(this.masterGain.gain, this.muted ? 0 : 0.72, this.context.currentTime)
+    smoothlySet(this.masterGain.gain, this.muted ? 0 : 0.46, this.context.currentTime)
+  }
+
+  private setProximityActive(active: boolean) {
+    const context = this.context
+    const gain = this.proximityGain
+    this.proximityActive = active
+    if (!context || !gain) return
+
+    const now = context.currentTime
+    gain.gain.cancelScheduledValues(now)
+
+    if (active) {
+      gain.gain.setValueAtTime(0, now)
+      gain.gain.linearRampToValueAtTime(0.006, now + 0.08)
+      gain.gain.linearRampToValueAtTime(0, now + 0.7)
+      return
+    }
+
+    smoothlySet(gain.gain, 0, now)
   }
 
   private setTeleportPhase(phase: TeleportAudioPhase) {
@@ -169,15 +207,15 @@ export class ProceduralAudioEngine {
     oscillator.frequency.cancelScheduledValues(now)
 
     if (phase === 'charging') {
-      gain.gain.setValueAtTime(0.015, now)
-      gain.gain.linearRampToValueAtTime(0.12, now + 0.9)
+      gain.gain.setValueAtTime(0.01, now)
+      gain.gain.linearRampToValueAtTime(0.075, now + 0.9)
       oscillator.frequency.setValueAtTime(90, now)
       oscillator.frequency.exponentialRampToValueAtTime(420, now + 0.9)
       return
     }
 
     if (phase === 'jump') {
-      gain.gain.setValueAtTime(0.14, now)
+      gain.gain.setValueAtTime(0.09, now)
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42)
       oscillator.frequency.setValueAtTime(520, now)
       oscillator.frequency.exponentialRampToValueAtTime(72, now + 0.42)
@@ -203,7 +241,7 @@ export class ProceduralAudioEngine {
 
     const source = this.context.createBufferSource()
     const gain = this.context.createGain()
-    gain.gain.value = 0.11
+    gain.gain.value = 0.065
     source.buffer = buffer
     source.connect(gain)
     gain.connect(this.masterGain)

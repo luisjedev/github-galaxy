@@ -166,6 +166,36 @@ test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', as
   await page.keyboard.up('s')
 })
 
+test('R devuelve la nave al mismo punto de entrada del sistema', async ({ page }) => {
+  const exploration = page.locator('[data-app-state="exploration"]')
+  const teleport = page.getByRole('status', { name: 'Secuencia de teletransporte' })
+  const initialFlight = {
+    x: await numberAttribute(page, 'data-x'),
+    z: await numberAttribute(page, 'data-z'),
+    altitude: await numberAttribute(page, 'data-altitude'),
+    heading: await numberAttribute(page, 'data-heading'),
+  }
+
+  await exploration.focus()
+  await page.keyboard.down('w')
+  await expect
+    .poll(
+      async () =>
+        Math.abs((await numberAttribute(page, 'data-x')) - initialFlight.x) +
+        Math.abs((await numberAttribute(page, 'data-z')) - initialFlight.z),
+    )
+    .toBeGreaterThan(0.5)
+  await page.keyboard.up('w')
+  await page.keyboard.press('r')
+
+  await expect(teleport).toHaveAttribute('data-teleport-phase', 'charging')
+  await expect(teleport).toHaveCount(0, { timeout: 3_000 })
+  expect(await numberAttribute(page, 'data-x')).toBeCloseTo(initialFlight.x, 3)
+  expect(await numberAttribute(page, 'data-z')).toBeCloseTo(initialFlight.z, 3)
+  expect(await numberAttribute(page, 'data-altitude')).toBeCloseTo(initialFlight.altitude, 3)
+  expect(await numberAttribute(page, 'data-heading')).toBeCloseTo(initialFlight.heading, 3)
+})
+
 test('mantener Espacio activa el turbo sin desplazar el navegador cuando la experiencia tiene foco', async ({
   page,
 }) => {

@@ -54,7 +54,7 @@ const TURN_SPEED = 1.1
 const ALTITUDE_SPEED = 0.7
 const ALTITUDE_LIMIT = 40
 const MAX_BANK = 0.58
-const MAX_PITCH = 0.6
+const MAX_PITCH = 0.3
 const ATTITUDE_RESPONSE = 8
 
 function approachZero(value: number, amount: number): number {
@@ -96,17 +96,8 @@ export function createInitialFlight(system: GitHubSystem): InitialFlight {
   }
 }
 
-export function createStarReturnFlight(): FlightState {
-  return {
-    x: 0,
-    z: -EMPTY_SYSTEM_SPAWN_DISTANCE,
-    altitude: SPAWN_ALTITUDE,
-    heading: 0,
-    bank: 0,
-    pitch: 0,
-    speed: 0,
-    turbo: false,
-  }
+export function createRespawnFlight(system: GitHubSystem): FlightState {
+  return createInitialFlight(system).state
 }
 
 export function describeShipAppearance(system: GitHubSystem): ShipAppearance {

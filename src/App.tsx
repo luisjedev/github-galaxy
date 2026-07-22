@@ -42,7 +42,7 @@ const controls = [
   ['J / K', 'Inclinar abajo · arriba (combinar con W / S)'],
   ['Espacio', 'Turbo'],
   ['E', 'Abrir destino'],
-  ['R', 'Volver a la estrella'],
+  ['R', 'Volver al punto de entrada'],
   ['Esc', 'Pausa'],
 ] as const
 

@@ -9,7 +9,7 @@ import {
 import {
   advanceFlight,
   createInitialFlight,
-  createStarReturnFlight,
+  createRespawnFlight,
   idleFlightInput,
   type FlightInput,
   type FlightState,
@@ -134,7 +134,7 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
       previousFrameTime.current = time
       if (time - teleport.startedAt < TELEPORT_JUMP_MILLISECONDS) return
 
-      const returnedFlight = createStarReturnFlight()
+      const returnedFlight = createRespawnFlight(system)
       teleportState.current = { phase: 'idle', startedAt: 0 }
       flightInput.current = { ...idleFlightInput }
       flightState.current = returnedFlight

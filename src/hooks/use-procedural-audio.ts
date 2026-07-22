@@ -8,6 +8,7 @@ export type AudioExperienceState = 'waiting' | 'active' | 'muted' | 'unavailable
 
 export function useProceduralAudio() {
   const engineRef = useRef<ProceduralAudioEngine | null>(null)
+  const activationStartedRef = useRef(false)
   const [state, setState] = useState<AudioExperienceState>('waiting')
   const stateRef = useRef<AudioExperienceState>('waiting')
 
@@ -25,6 +26,9 @@ export function useProceduralAudio() {
       return
     }
 
+    if (activationStartedRef.current) return
+    activationStartedRef.current = true
+
     try {
       const engine = engineRef.current ?? new ProceduralAudioEngine()
       engineRef.current = engine
@@ -35,6 +39,30 @@ export function useProceduralAudio() {
       setAudioState('unavailable')
     }
   }, [setAudioState])
+
+  useEffect(() => {
+    if (state !== 'waiting') return
+
+    const activateFromFirstInteraction = (event: Event) => {
+      // The dedicated control keeps its normal click semantics while every
+      // other interaction enables sound automatically.
+      if (
+        event.type === 'pointerdown' &&
+        event.target instanceof Element &&
+        event.target.closest('.audio-control')
+      ) {
+        return
+      }
+      void activate()
+    }
+    window.addEventListener('pointerdown', activateFromFirstInteraction, { once: true })
+    window.addEventListener('keydown', activateFromFirstInteraction, { once: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', activateFromFirstInteraction)
+      window.removeEventListener('keydown', activateFromFirstInteraction)
+    }
+  }, [activate, state])
 
   const toggleMuted = useCallback(() => {
     if (stateRef.current === 'waiting') {

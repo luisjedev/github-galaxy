@@ -124,7 +124,7 @@ async function installControlledAudioContext(page: Page) {
   })
 }
 
-test('una entrada directa permanece en silencio hasta activar el audio explícitamente', async ({
+test('una entrada directa activa el audio por defecto con la primera interacción', async ({
   page,
 }) => {
   await installControlledAudioContext(page)
@@ -140,7 +140,10 @@ test('una entrada directa permanece en silencio hasta activar el audio explícit
     ),
   ).toBe(0)
 
-  await page.getByRole('button', { name: 'Activar audio' }).click()
+  const audioReactivity = page.getByTestId('audio-reactivity')
+  await expect(audioReactivity).toHaveAttribute('data-proximity-state', 'active')
+  await page.locator('[data-app-state="exploration"]').focus()
+  await page.keyboard.down('w')
 
   await expect(page.getByTestId('audio-control')).toHaveAttribute('data-audio-state', 'active')
   expect(
@@ -149,11 +152,6 @@ test('una entrada directa permanece en silencio hasta activar el audio explícit
         .__audioTestState,
     ),
   ).toEqual({ constructions: 1, resumes: 1 })
-
-  const audioReactivity = page.getByTestId('audio-reactivity')
-  await expect(audioReactivity).toHaveAttribute('data-proximity-state', 'active')
-  await page.locator('[data-app-state="exploration"]').focus()
-  await page.keyboard.down('w')
   await expect(audioReactivity).toHaveAttribute('data-engine-state', 'active')
   await page.keyboard.down(' ')
   await expect(audioReactivity).toHaveAttribute('data-turbo-state', 'active')
