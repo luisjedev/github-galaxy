@@ -517,6 +517,114 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.celestial-card {
+  position: absolute;
+  z-index: 7;
+  bottom: clamp(2rem, 5vw, 4rem);
+  left: clamp(2rem, 6vw, 5rem);
+  width: min(24rem, calc(100vw - 4rem));
+  padding: 1.25rem;
+  border: 1px solid rgb(141 245 223 / 28%);
+  border-radius: 0.85rem;
+  background: rgb(7 9 24 / 86%);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 32%);
+  backdrop-filter: blur(18px);
+}
+
+.celestial-card .eyebrow {
+  margin-bottom: 0.5rem;
+}
+
+.celestial-card h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.45rem;
+  letter-spacing: -0.035em;
+}
+
+.celestial-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.celestial-card__heading img {
+  width: 4rem;
+  height: 4rem;
+  border: 1px solid rgb(169 149 255 / 32%);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.celestial-card__handle,
+.celestial-card__description,
+.celestial-card__hint {
+  color: #9ca4bf;
+}
+
+.celestial-card__handle {
+  margin: 0.2rem 0 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.74rem;
+}
+
+.celestial-card__description {
+  margin: 1rem 0;
+  line-height: 1.55;
+}
+
+.celestial-card__metrics {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+}
+
+.celestial-card__metrics--planet {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.celestial-card__metrics div {
+  min-width: 0;
+}
+
+.celestial-card__metrics dt {
+  color: #737c99;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.celestial-card__metrics dd {
+  margin: 0.18rem 0 0;
+  overflow-wrap: anywhere;
+  color: #eef0fa;
+  font-size: 0.78rem;
+}
+
+.celestial-card > a {
+  display: inline-block;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid rgb(169 149 255 / 36%);
+  border-radius: 0.5rem;
+  color: #8df5df;
+  background: rgb(128 103 230 / 15%);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.celestial-card > a:focus-visible {
+  outline: 3px solid #f8cf68;
+  outline-offset: 3px;
+}
+
+.celestial-card__hint {
+  margin: 0.7rem 0 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+}
+
 .flight-hud {
   position: absolute;
   z-index: 6;

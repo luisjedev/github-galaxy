@@ -117,17 +117,25 @@ function ProceduralShip({
   )
 }
 
-function OrbitingPlanet({ planet }: { planet: PlanetDescriptor }) {
+function OrbitingPlanet({
+  planet,
+  simulationStartedAt,
+}: {
+  planet: PlanetDescriptor
+  simulationStartedAt: number
+}) {
   const orbit = useRef<Group>(null)
   const planetMesh = useRef<Group>(null)
   const { appearance } = planet
 
-  useFrame(({ clock }) => {
+  useFrame(() => {
     if (!orbit.current || !planetMesh.current) return
+    const elapsedSeconds = (performance.now() - simulationStartedAt) / 1_000
     orbit.current.rotation.y =
       planet.initialPhase +
-      (clock.elapsedTime / planet.orbitPeriodSeconds) * FULL_ROTATION_RADIANS
-    planetMesh.current.rotation.y = planet.initialRotation + clock.elapsedTime * planet.rotationSpeed
+      (elapsedSeconds / planet.orbitPeriodSeconds) * FULL_ROTATION_RADIANS
+    planetMesh.current.rotation.y =
+      planet.initialRotation + elapsedSeconds * planet.rotationSpeed
   })
 
   return (
@@ -177,7 +185,15 @@ function OrbitingPlanet({ planet }: { planet: PlanetDescriptor }) {
   )
 }
 
-function SystemScene({ system, flight }: { system: GitHubSystem; flight: FlightState }) {
+function SystemScene({
+  system,
+  flight,
+  simulationStartedAt,
+}: {
+  system: GitHubSystem
+  flight: FlightState
+  simulationStartedAt: number
+}) {
   const { starAppearance, planets } = system
   const extent = Math.max(20, ...planets.map((planet) => planet.orbitRadius + planet.radius))
   const shipAppearance = describeShipAppearance(system)
@@ -196,7 +212,11 @@ function SystemScene({ system, flight }: { system: GitHubSystem; flight: FlightS
         <meshBasicMaterial color={hsl(starAppearance.primaryHue, 94, 64)} />
       </mesh>
       {planets.map((planet) => (
-        <OrbitingPlanet key={planet.repository.id} planet={planet} />
+        <OrbitingPlanet
+          key={planet.repository.id}
+          planet={planet}
+          simulationStartedAt={simulationStartedAt}
+        />
       ))}
       <ProceduralShip
         flight={flight}
@@ -208,7 +228,15 @@ function SystemScene({ system, flight }: { system: GitHubSystem; flight: FlightS
   )
 }
 
-export function GalaxyScene({ system, flight }: { system: GitHubSystem; flight: FlightState }) {
+export function GalaxyScene({
+  system,
+  flight,
+  simulationStartedAt,
+}: {
+  system: GitHubSystem
+  flight: FlightState
+  simulationStartedAt: number
+}) {
   const farPlane = Math.max(
     160,
     ...system.planets.map((planet) => (planet.orbitRadius + planet.radius) * 4),
@@ -226,7 +254,11 @@ export function GalaxyScene({ system, flight }: { system: GitHubSystem; flight: 
         gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
         shadows
       >
-        <SystemScene system={system} flight={flight} />
+        <SystemScene
+          system={system}
+          flight={flight}
+          simulationStartedAt={simulationStartedAt}
+        />
       </Canvas>
     </div>
   )

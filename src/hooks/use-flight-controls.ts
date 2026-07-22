@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  selectActiveCelestialBody,
+  type ActiveCelestialBody,
+} from '../domain/celestial-interaction'
+import {
   advanceFlight,
   createInitialFlight,
   idleFlightInput,
   type FlightInput,
+  type FlightState,
 } from '../domain/flight'
 import type { GitHubSystem } from '../domain/github-system'
 
@@ -30,7 +35,14 @@ function updateFlightInput(
 
 export function useFlightControls(system: GitHubSystem) {
   const initialFlight = useState(() => createInitialFlight(system))[0]
+  const simulationStartedAt = useState(() => performance.now())[0]
   const [flight, setFlight] = useState(initialFlight.state)
+  const flightState = useRef<FlightState>(initialFlight.state)
+  const initialActiveBody = useState(() =>
+    selectActiveCelestialBody(system, initialFlight.state, 0),
+  )[0]
+  const [activeBody, setActiveBody] = useState<ActiveCelestialBody | null>(initialActiveBody)
+  const activeBodyRef = useRef<ActiveCelestialBody | null>(initialActiveBody)
   const flightInput = useRef<FlightInput>({ ...idleFlightInput })
   const experienceRef = useRef<HTMLElement>(null)
 
@@ -38,6 +50,19 @@ export function useFlightControls(system: GitHubSystem) {
     experienceRef.current?.focus({ preventScroll: true })
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (!experienceRef.current?.contains(document.activeElement)) return
+      if (event.key.toLowerCase() === 'e' && !event.repeat) {
+        const destination =
+          activeBodyRef.current?.kind === 'planet'
+            ? activeBodyRef.current.planet.repository.html_url
+            : activeBodyRef.current?.kind === 'star'
+              ? system.profile.html_url
+              : null
+        if (destination) {
+          event.preventDefault()
+          window.open(destination, '_blank', 'noopener,noreferrer')
+        }
+        return
+      }
       updateFlightInput(flightInput.current, event, true)
     }
     const handleKeyUp = (event: globalThis.KeyboardEvent) =>
@@ -52,14 +77,27 @@ export function useFlightControls(system: GitHubSystem) {
     let animationFrame = 0
     let previousTime = performance.now()
     const update = (time: number) => {
-      const elapsedSeconds = (time - previousTime) / 1_000
+      const frameSeconds = (time - previousTime) / 1_000
       previousTime = time
-      setFlight((current) => {
-        const input = flightInput.current
-        const hasInput = Object.values(input).some(Boolean)
-        if (!hasInput && current.speed === 0 && !current.turbo) return current
-        return advanceFlight(current, input, elapsedSeconds)
-      })
+      const current = flightState.current
+      const input = flightInput.current
+      const hasInput = Object.values(input).some(Boolean)
+      const nextFlight =
+        !hasInput && current.speed === 0 && !current.turbo
+          ? current
+          : advanceFlight(current, input, frameSeconds)
+
+      if (nextFlight !== current) {
+        flightState.current = nextFlight
+        setFlight(nextFlight)
+      }
+
+      const elapsedSeconds = (time - simulationStartedAt) / 1_000
+      const nextActiveBody = selectActiveCelestialBody(system, nextFlight, elapsedSeconds)
+      if (nextActiveBody?.key !== activeBodyRef.current?.key) {
+        activeBodyRef.current = nextActiveBody
+        setActiveBody(nextActiveBody)
+      }
       animationFrame = requestAnimationFrame(update)
     }
 
@@ -70,7 +108,7 @@ export function useFlightControls(system: GitHubSystem) {
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [])
+  }, [simulationStartedAt, system])
 
-  return { experienceRef, flight, initialFlight }
+  return { experienceRef, flight, initialFlight, activeBody, simulationStartedAt }
 }

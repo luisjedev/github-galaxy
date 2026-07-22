@@ -10,6 +10,12 @@ import {
   type AppState,
   type LoadingStage,
 } from './domain/app-state'
+import {
+  atmosphereRadius,
+  informationZoneRadius,
+  STAR_RADIUS,
+  type ActiveCelestialBody,
+} from './domain/celestial-interaction'
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
 import { describeShipAppearance } from './domain/flight'
 import { type GitHubSystem, type PlanetDescriptor } from './domain/github-system'
@@ -206,6 +212,8 @@ function Planet({ planet }: { planet: PlanetDescriptor }) {
       data-orbit-radius={planet.orbitRadius}
       data-orbit-period={planet.orbitPeriodSeconds}
       data-planet-radius={planet.radius}
+      data-atmosphere-radius={atmosphereRadius(planet.radius)}
+      data-information-radius={informationZoneRadius(planet.radius)}
     >
       <span
         className={`procedural-planet procedural-planet--${appearance.surfaceFeature}`}
@@ -222,9 +230,104 @@ function Planet({ planet }: { planet: PlanetDescriptor }) {
   )
 }
 
+function CelestialCard({
+  activeBody,
+  system,
+}: {
+  activeBody: ActiveCelestialBody
+  system: GitHubSystem
+}) {
+  if (activeBody.kind === 'star') {
+    const { profile } = system
+    const displayName = profile.name ?? profile.login
+
+    return (
+      <aside
+        className="celestial-card"
+        aria-label={`Ficha de ${displayName}`}
+        aria-live="polite"
+        data-active-body="star"
+      >
+        <div className="celestial-card__heading">
+          <img src={profile.avatar_url} alt={`Avatar de ${displayName}`} />
+          <div>
+            <p className="eyebrow">Estrella próxima</p>
+            <h2>{displayName}</h2>
+            <p className="celestial-card__handle">@{profile.login}</p>
+          </div>
+        </div>
+        <p className="celestial-card__description">
+          {profile.bio ?? 'Sin biografía pública.'}
+        </p>
+        <dl className="celestial-card__metrics">
+          <div>
+            <dt>Seguidores</dt>
+            <dd>{profile.followers.toLocaleString('es-ES')} seguidores</dd>
+          </div>
+        </dl>
+        <a href={profile.html_url} target="_blank" rel="noreferrer noopener">
+          Ver perfil en GitHub
+        </a>
+        <p className="celestial-card__hint">Pulsa E para abrir en una pestaña nueva</p>
+      </aside>
+    )
+  }
+
+  const { repository } = activeBody.planet
+  const formattedDate = new Intl.DateTimeFormat('es-ES', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(repository.updated_at))
+
+  return (
+    <aside
+      className="celestial-card"
+      aria-label={`Ficha de ${repository.name}`}
+      aria-live="polite"
+      data-active-body={`planet:${repository.id}`}
+    >
+      <p className="eyebrow">Planeta próximo</p>
+      <h2>{repository.name}</h2>
+      <p className="celestial-card__description">
+        {repository.description ?? 'Sin descripción pública.'}
+      </p>
+      <dl className="celestial-card__metrics celestial-card__metrics--planet">
+        <div>
+          <dt>Lenguaje</dt>
+          <dd>{repository.language ?? 'Sin lenguaje'}</dd>
+        </div>
+        <div>
+          <dt>Estrellas</dt>
+          <dd>{repository.stargazers_count.toLocaleString('es-ES')} estrellas</dd>
+        </div>
+        <div>
+          <dt>Forks</dt>
+          <dd>{repository.forks_count.toLocaleString('es-ES')} forks</dd>
+        </div>
+        <div>
+          <dt>Tamaño</dt>
+          <dd>{repository.size.toLocaleString('es-ES')} KB</dd>
+        </div>
+        <div>
+          <dt>Actualización</dt>
+          <dd>
+            <time dateTime={repository.updated_at}>{formattedDate}</time>
+          </dd>
+        </div>
+      </dl>
+      <a href={repository.html_url} target="_blank" rel="noreferrer noopener">
+        Ver repositorio en GitHub
+      </a>
+      <p className="celestial-card__hint">Pulsa E para abrir en una pestaña nueva</p>
+    </aside>
+  )
+}
+
 function Exploration({ system }: { system: GitHubSystem }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
-  const { experienceRef, flight, initialFlight } = useFlightControls(system)
+  const { experienceRef, flight, initialFlight, activeBody, simulationStartedAt } =
+    useFlightControls(system)
   const shipAppearance = describeShipAppearance(system)
 
   return (
@@ -244,7 +347,11 @@ function Exploration({ system }: { system: GitHubSystem }) {
         {ownRepositoryCount === 0 ? <p>Una estrella solitaria espera tu visita.</p> : null}
       </section>
 
-      <GalaxyScene system={system} flight={flight} />
+      <GalaxyScene
+        system={system}
+        flight={flight}
+        simulationStartedAt={simulationStartedAt}
+      />
 
       <div className="scene-observability" aria-label={`Sistema planetario de ${profile.login}`}>
         {planets.map((planet) => (
@@ -257,6 +364,8 @@ function Exploration({ system }: { system: GitHubSystem }) {
           data-star-seed={starSeed}
           data-primary-hue={starAppearance.primaryHue}
           data-language-families={starAppearance.languageFamilies.join(',')}
+          data-atmosphere-radius={atmosphereRadius(STAR_RADIUS)}
+          data-information-radius={informationZoneRadius(STAR_RADIUS)}
         />
         <div
           className="procedural-ship"
@@ -270,6 +379,8 @@ function Exploration({ system }: { system: GitHubSystem }) {
           Nave low-poly con luz y estela tecnológicas
         </div>
       </div>
+
+      {activeBody ? <CelestialCard activeBody={activeBody} system={system} /> : null}
 
       <output
         className="flight-hud"
