@@ -7,7 +7,7 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await expect(page.getByLabel('Usuario de GitHub')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Explorar sistema' })).toBeVisible()
   await expect(page.getByText(/experiencia de escritorio con teclado/i)).toBeVisible()
-  await expect(page.getByText('W / S')).toBeVisible()
+  await expect(page.getByText('W / S', { exact: true })).toBeVisible()
   await expect(page.getByText('A / D')).toBeVisible()
   await expect(page.getByText('J / K')).toBeVisible()
   await expect(page.getByText('Espacio')).toBeVisible()

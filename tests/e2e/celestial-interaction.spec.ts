@@ -149,9 +149,23 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   await popup.close()
 
-  await page.keyboard.down('s')
-  await expect(cards).toHaveCount(0, { timeout: 10_000 })
-  await page.keyboard.up('s')
+  const departureHeading = Number(
+    await page.getByTestId('flight-state').getAttribute('data-heading'),
+  )
+  await page.keyboard.down('a')
+  await expect
+    .poll(async () =>
+      Number(await page.getByTestId('flight-state').getAttribute('data-heading')),
+    )
+    .toBeGreaterThan(departureHeading + 2)
+  await page.keyboard.up('a')
+  await page.keyboard.down('w')
+  await page.keyboard.down('k')
+  await page.keyboard.down(' ')
+  await expect(cards).toHaveCount(0, { timeout: 15_000 })
+  await page.keyboard.up(' ')
+  await page.keyboard.up('k')
+  await page.keyboard.up('w')
 
   await page.keyboard.press('e')
   await page.waitForTimeout(300)

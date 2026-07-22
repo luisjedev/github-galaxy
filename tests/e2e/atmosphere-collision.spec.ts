@@ -59,7 +59,9 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
   await page.keyboard.down(' ')
 
   const warning = page.getByRole('alert', { name: 'Peligro atmosférico' })
-  await expect(warning).toContainText('La nave no está preparada para atravesar la atmósfera')
+  await expect(warning).toContainText('La nave no está preparada para atravesar la atmósfera', {
+    timeout: 10_000,
+  })
   await expect(page.getByTestId('flight-state')).toHaveAttribute(
     'data-atmosphere-contact',
     'star',

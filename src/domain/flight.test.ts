@@ -3,6 +3,7 @@ import {
   advanceFlight,
   idleFlightInput,
   NORMAL_FLIGHT_SPEED,
+  REVERSE_FLIGHT_SPEED,
   TURBO_FLIGHT_SPEED,
   type FlightInput,
   type FlightState,
@@ -47,14 +48,14 @@ describe('advanceFlight', () => {
     expect(advanceRepeatedly(idleState, input({ left: true })).bank).toBeCloseTo(-0.58)
   })
 
-  test('inclina el morro hacia la subida o la bajada y recupera la posición neutra', () => {
-    const climbing = advanceFlight(idleState, input({ ascend: true }), 0.05)
-    const descending = advanceFlight(idleState, input({ descend: true }), 0.05)
+  test('J y K inclinan la nave sin desplazarla por sí solos', () => {
+    const tiltingUp = advanceFlight(idleState, input({ ascend: true }), 0.05)
+    const tiltingDown = advanceFlight(idleState, input({ descend: true }), 0.05)
 
-    expect(climbing.altitude).toBeGreaterThan(0)
-    expect(climbing.pitch).toBeLessThan(0)
-    expect(descending.altitude).toBeLessThan(0)
-    expect(descending.pitch).toBeGreaterThan(0)
+    expect(tiltingUp).toMatchObject({ x: 0, z: 0, altitude: 0, speed: 0 })
+    expect(tiltingUp.pitch).toBeLessThan(0)
+    expect(tiltingDown).toMatchObject({ x: 0, z: 0, altitude: 0, speed: 0 })
+    expect(tiltingDown.pitch).toBeGreaterThan(0)
     expect(advanceRepeatedly(idleState, input({ ascend: true })).pitch).toBeCloseTo(-0.4)
 
     const banked = advanceRepeatedly(idleState, input({ left: true }), 10)
@@ -62,11 +63,29 @@ describe('advanceFlight', () => {
     expect(level.bank).toBe(0)
   })
 
-  test('limita la velocidad normal a 1.5 y el turbo a 3', () => {
+  test('solo cambia de altitud al combinar la inclinación con W o S', () => {
+    const ascendingForward = advanceFlight(
+      idleState,
+      input({ ascend: true, forward: true }),
+      0.05,
+    )
+    const descendingInReverse = advanceFlight(
+      idleState,
+      input({ descend: true, reverse: true }),
+      0.05,
+    )
+
+    expect(ascendingForward.altitude).toBeGreaterThan(0)
+    expect(descendingInReverse.altitude).toBeLessThan(0)
+  })
+
+  test('limita mucho la velocidad normal, la reversa y el turbo', () => {
     const normal = advanceRepeatedly(idleState, input({ forward: true }))
+    const reverse = advanceRepeatedly(idleState, input({ reverse: true }))
     const turbo = advanceRepeatedly(idleState, input({ forward: true, turbo: true }))
 
     expect(normal.speed).toBe(NORMAL_FLIGHT_SPEED)
+    expect(reverse.speed).toBe(-REVERSE_FLIGHT_SPEED)
     expect(turbo.speed).toBe(TURBO_FLIGHT_SPEED)
   })
 })

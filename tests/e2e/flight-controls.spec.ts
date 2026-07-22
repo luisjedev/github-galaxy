@@ -83,6 +83,9 @@ test('muestra una única nave procedural determinista, la cámara de seguimiento
   await expect(page.getByText('A / D', { exact: true })).toBeVisible()
   await expect(page.getByText('Girar a la izquierda · derecha', { exact: true })).toBeVisible()
   await expect(page.getByText('J / K', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Inclinar abajo · arriba (combinar con W / S)', { exact: true }),
+  ).toBeVisible()
   await expect(page.getByText('Espacio', { exact: true })).toBeVisible()
   await expect(page.getByText('E', { exact: true })).toBeVisible()
   await expect(page.getByText('R', { exact: true })).toBeVisible()
@@ -119,20 +122,28 @@ test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', as
   await expect.poll(async () => await numberAttribute(page, 'data-bank')).toBeGreaterThan(0.05)
   await page.keyboard.up('d')
 
-  const altitudeBeforeClimb = await numberAttribute(page, 'data-altitude')
   await page.keyboard.down('k')
+  await expect.poll(async () => await numberAttribute(page, 'data-pitch')).toBeLessThan(-0.05)
+  const altitudeWhileTiltingUp = await numberAttribute(page, 'data-altitude')
+  await page.waitForTimeout(250)
+  expect(await numberAttribute(page, 'data-altitude')).toBeCloseTo(altitudeWhileTiltingUp, 2)
+  await page.keyboard.down('w')
   await expect
     .poll(async () => await numberAttribute(page, 'data-altitude'))
-    .toBeGreaterThan(altitudeBeforeClimb)
-  await expect.poll(async () => await numberAttribute(page, 'data-pitch')).toBeLessThan(-0.05)
+    .toBeGreaterThan(altitudeWhileTiltingUp)
+  await page.keyboard.up('w')
   await page.keyboard.up('k')
 
-  const altitudeBeforeDescent = await numberAttribute(page, 'data-altitude')
   await page.keyboard.down('j')
+  await expect.poll(async () => await numberAttribute(page, 'data-pitch')).toBeGreaterThan(0.05)
+  const altitudeWhileTiltingDown = await numberAttribute(page, 'data-altitude')
+  await page.waitForTimeout(250)
+  expect(await numberAttribute(page, 'data-altitude')).toBeCloseTo(altitudeWhileTiltingDown, 2)
+  await page.keyboard.down('s')
   await expect
     .poll(async () => await numberAttribute(page, 'data-altitude'))
-    .toBeLessThan(altitudeBeforeDescent)
-  await expect.poll(async () => await numberAttribute(page, 'data-pitch')).toBeGreaterThan(0.05)
+    .toBeLessThan(altitudeWhileTiltingDown)
+  await page.keyboard.up('s')
   await page.keyboard.up('j')
 
   await page.keyboard.down('s')
@@ -161,7 +172,7 @@ test('mantener Espacio activa el turbo sin desplazar el navegador cuando la expe
   await page.keyboard.down('w')
   await page.keyboard.down(' ')
   await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'true')
-  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBeGreaterThan(1.5)
+  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBeGreaterThan(0.5)
   expect(await page.evaluate(() => window.scrollY)).toBe(initialScroll)
 
   await page.keyboard.up(' ')

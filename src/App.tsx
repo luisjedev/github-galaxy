@@ -28,7 +28,7 @@ import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
 const controls = [
   ['W / S', 'Avanzar · frenar / reversa'],
   ['A / D', 'Girar a la izquierda · derecha'],
-  ['J / K', 'Descender · subir'],
+  ['J / K', 'Inclinar abajo · arriba (combinar con W / S)'],
   ['Espacio', 'Turbo'],
   ['E', 'Abrir destino'],
   ['R', 'Volver a la estrella'],

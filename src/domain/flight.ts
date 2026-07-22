@@ -42,14 +42,14 @@ export const idleFlightInput: FlightInput = {
 }
 
 const SPAWN_DISTANCE = 10
-const FORWARD_ACCELERATION = 2
-const REVERSE_ACCELERATION = 1.5
-const COAST_DECELERATION = 0.75
-export const NORMAL_FLIGHT_SPEED = 1.5
-const REVERSE_SPEED = 0.9
-export const TURBO_FLIGHT_SPEED = 3
+const FORWARD_ACCELERATION = 0.5
+const REVERSE_ACCELERATION = 0.35
+const COAST_DECELERATION = 0.2
+export const NORMAL_FLIGHT_SPEED = 0.5
+export const REVERSE_FLIGHT_SPEED = 0.3
+export const TURBO_FLIGHT_SPEED = 1
 const TURN_SPEED = 1.9
-const ALTITUDE_SPEED = 7
+const ALTITUDE_SPEED = 0.35
 const ALTITUDE_LIMIT = 40
 const MAX_BANK = 0.58
 const MAX_PITCH = 0.4
@@ -117,15 +117,17 @@ export function advanceFlight(
   }
 
   speed = Math.max(
-    -REVERSE_SPEED,
+    -REVERSE_FLIGHT_SPEED,
     Math.min(turbo ? TURBO_FLIGHT_SPEED : NORMAL_FLIGHT_SPEED, speed),
   )
   const turnDirection = Number(input.left) - Number(input.right)
   const heading = state.heading + turnDirection * TURN_SPEED * elapsed
   const altitudeDirection = Number(input.ascend) - Number(input.descend)
+  const hasThrustInput = input.forward !== input.reverse
+  const altitudeChange = hasThrustInput ? altitudeDirection * ALTITUDE_SPEED * elapsed : 0
   const altitude = Math.max(
     -ALTITUDE_LIMIT,
-    Math.min(ALTITUDE_LIMIT, state.altitude + altitudeDirection * ALTITUDE_SPEED * elapsed),
+    Math.min(ALTITUDE_LIMIT, state.altitude + altitudeChange),
   )
   const targetBank = turnDirection === 0 ? 0 : -turnDirection * MAX_BANK
   const targetPitch = altitudeDirection === 0 ? 0 : -altitudeDirection * MAX_PITCH
