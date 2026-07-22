@@ -25,9 +25,9 @@ function ChaseCamera({ flight }: { flight: FlightState }) {
     const forwardX = Math.sin(flight.heading)
     const forwardZ = Math.cos(flight.heading)
     desiredPosition.current.set(
-      flight.x - forwardX * 0.65,
-      flight.altitude + 0.3,
-      flight.z - forwardZ * 0.65,
+      flight.x - forwardX * 0.85,
+      flight.altitude + 0.22,
+      flight.z - forwardZ * 0.85,
     )
     camera.position.lerp(
       desiredPosition.current,
@@ -147,8 +147,8 @@ function OrbitingPlanet({
   return (
     <>
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[planet.orbitRadius, 0.018, 3, 128]} />
-        <meshBasicMaterial color="#8790bd" transparent opacity={0.2} depthWrite={false} />
+        <torusGeometry args={[planet.orbitRadius, 0.012, 3, 128]} />
+        <meshBasicMaterial color="#8790bd" transparent opacity={0.08} depthWrite={false} />
       </mesh>
       <group ref={orbit}>
         <group ref={planetMesh} position={[planet.orbitRadius, 0, 0]}>
@@ -255,7 +255,7 @@ export function GalaxyScene({
       aria-label="Escena tridimensional con cámara automática siguiendo la nave"
     >
       <Canvas
-        camera={{ position: [0, 0.3, -10.65], fov: 64, near: 0.1, far: farPlane }}
+        camera={{ position: [0, 0.22, -10.85], fov: 64, near: 0.1, far: farPlane }}
         dpr={[1, 1.6]}
         gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
         shadows

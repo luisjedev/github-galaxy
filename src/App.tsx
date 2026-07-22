@@ -416,7 +416,7 @@ function Exploration({ system }: { system: GitHubSystem }) {
         data-atmosphere-contact={atmosphereContact?.key ?? 'none'}
         aria-label="Estado de navegación"
       >
-        <span>Velocidad {Math.round(flight.speed)}</span>
+        <span>Velocidad {flight.speed.toFixed(1)}</span>
         <span>Altitud {Math.round(flight.altitude)}</span>
         <strong>{flight.turbo ? 'Turbo activo' : 'Impulso normal'}</strong>
       </output>

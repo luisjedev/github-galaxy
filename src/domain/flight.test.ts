@@ -56,7 +56,7 @@ describe('advanceFlight', () => {
     expect(tiltingUp.pitch).toBeLessThan(0)
     expect(tiltingDown).toMatchObject({ x: 0, z: 0, altitude: 0, speed: 0 })
     expect(tiltingDown.pitch).toBeGreaterThan(0)
-    expect(advanceRepeatedly(idleState, input({ ascend: true })).pitch).toBeCloseTo(-0.4)
+    expect(advanceRepeatedly(idleState, input({ ascend: true })).pitch).toBeCloseTo(-0.6)
 
     const banked = advanceRepeatedly(idleState, input({ left: true }), 10)
     const level = advanceRepeatedly(banked, input({}))

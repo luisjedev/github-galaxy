@@ -42,17 +42,17 @@ export const idleFlightInput: FlightInput = {
 }
 
 const SPAWN_DISTANCE = 10
-const FORWARD_ACCELERATION = 0.5
+const FORWARD_ACCELERATION = 2
 const REVERSE_ACCELERATION = 0.35
 const COAST_DECELERATION = 0.2
-export const NORMAL_FLIGHT_SPEED = 0.5
+export const NORMAL_FLIGHT_SPEED = 2
 export const REVERSE_FLIGHT_SPEED = 0.3
-export const TURBO_FLIGHT_SPEED = 1
-const TURN_SPEED = 1.9
-const ALTITUDE_SPEED = 0.35
+export const TURBO_FLIGHT_SPEED = 4
+const TURN_SPEED = 1.1
+const ALTITUDE_SPEED = 0.7
 const ALTITUDE_LIMIT = 40
 const MAX_BANK = 0.58
-const MAX_PITCH = 0.4
+const MAX_PITCH = 0.6
 const ATTITUDE_RESPONSE = 8
 
 function approachZero(value: number, amount: number): number {
