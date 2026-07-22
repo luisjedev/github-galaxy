@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   ACESFilmicToneMapping,
   Frustum,
@@ -94,13 +94,25 @@ function planetMarkerDiscoveryRadius(planetRadius: number): number {
   return planetRadius + PLANET_MARKER_DISCOVERY_CLEARANCE
 }
 
-function ChaseCamera({ flight }: { flight: FlightState }) {
+type FlightStateRef = RefObject<FlightState>
+
+function FlightSimulation({
+  advanceFlightFrame,
+}: {
+  advanceFlightFrame: (time: number) => void
+}) {
+  useFrame(() => advanceFlightFrame(performance.now()), -100)
+  return null
+}
+
+function ChaseCamera({ flightRef }: { flightRef: FlightStateRef }) {
   const { camera } = useThree()
   const desiredPosition = useRef(new Vector3())
   const lookAt = useRef(new Vector3())
   const cameraPitch = useRef(0)
 
   useFrame((_, elapsedSeconds) => {
+    const flight = flightRef.current
     const frameSeconds = Math.min(elapsedSeconds, 0.05)
     const targetPitch = flight.pitch * 0.45
     cameraPitch.current +=
@@ -125,19 +137,19 @@ function ChaseCamera({ flight }: { flight: FlightState }) {
       flight.z + forwardZ * CHASE_CAMERA_LOOK_DISTANCE,
     )
     camera.lookAt(lookAt.current)
-  })
+  }, -40)
 
   return null
 }
 
 function OrientationTracker({
   system,
-  flight,
+  flightRef,
   simulationStartedAt,
   onMarkersChange,
 }: {
   system: GitHubSystem
-  flight: FlightState
+  flightRef: FlightStateRef
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
@@ -149,6 +161,7 @@ function OrientationTracker({
   const bodySphere = useRef(new Sphere())
 
   useFrame(() => {
+    const flight = flightRef.current
     const now = performance.now()
     camera.updateMatrixWorld()
     projectionScreenMatrix.current.multiplyMatrices(
@@ -233,14 +246,16 @@ function OrientationTracker({
 
 function SystemScene({
   system,
-  flight,
+  flightRef,
+  advanceFlightFrame,
   simulationStartedAt,
   onMarkersChange,
   settings,
   orbitalVisual,
 }: {
   system: GitHubSystem
-  flight: FlightState
+  flightRef: FlightStateRef
+  advanceFlightFrame: (time: number) => void
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
   settings: VisualSettings
@@ -252,6 +267,7 @@ function SystemScene({
 
   return (
     <>
+      <FlightSimulation advanceFlightFrame={advanceFlightFrame} />
       <color attach="background" args={['#030510']} />
       <ambientLight intensity={0.24} color="#7181a8" />
       <hemisphereLight args={['#8096c9', '#130d20', 0.34]} />
@@ -265,7 +281,7 @@ function SystemScene({
         seed={system.starSeed}
         quality={settings.quality}
         reducedMotion={settings.reducedMotion}
-        flight={flight}
+        flightRef={flightRef}
         shootingStars={orbitalVisual.shootingStars}
         shootingStarCycleSeconds={orbitalVisual.shootingStarCycleSeconds}
       />
@@ -290,14 +306,14 @@ function SystemScene({
         belt={orbitalVisual.asteroidBelt}
       />
       <ProceduralShip
-        flight={flight}
+        flightRef={flightRef}
         primaryHue={shipAppearance.primaryHue}
         accentHue={shipAppearance.accentHue}
       />
-      <ChaseCamera flight={flight} />
+      <ChaseCamera flightRef={flightRef} />
       <OrientationTracker
         system={system}
-        flight={flight}
+        flightRef={flightRef}
         simulationStartedAt={simulationStartedAt}
         onMarkersChange={onMarkersChange}
       />
@@ -305,14 +321,18 @@ function SystemScene({
   )
 }
 
-export function GalaxyScene({
+export const GalaxyScene = memo(function GalaxyScene({
   system,
-  flight,
+  initialFlight,
+  flightRef,
+  advanceFlightFrame,
   simulationStartedAt,
   onMarkersChange,
 }: {
   system: GitHubSystem
-  flight: FlightState
+  initialFlight: FlightState
+  flightRef: FlightStateRef
+  advanceFlightFrame: (time: number) => void
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
@@ -354,9 +374,9 @@ export function GalaxyScene({
       <Canvas
         camera={{
           position: [
-            flight.x - Math.sin(flight.heading) * CHASE_CAMERA_BACK_DISTANCE,
-            flight.altitude + CHASE_CAMERA_HEIGHT,
-            flight.z - Math.cos(flight.heading) * CHASE_CAMERA_BACK_DISTANCE,
+            initialFlight.x - Math.sin(initialFlight.heading) * CHASE_CAMERA_BACK_DISTANCE,
+            initialFlight.altitude + CHASE_CAMERA_HEIGHT,
+            initialFlight.z - Math.cos(initialFlight.heading) * CHASE_CAMERA_BACK_DISTANCE,
           ],
           fov: 64,
           near: 0.1,
@@ -377,7 +397,8 @@ export function GalaxyScene({
       >
         <SystemScene
           system={system}
-          flight={flight}
+          flightRef={flightRef}
+          advanceFlightFrame={advanceFlightFrame}
           simulationStartedAt={simulationStartedAt}
           onMarkersChange={onMarkersChange}
           settings={settings}
@@ -386,6 +407,6 @@ export function GalaxyScene({
       </Canvas>
     </div>
   )
-}
+})
 
 export { SHIP_WORLD_SCALE }

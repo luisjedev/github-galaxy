@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -7,6 +7,7 @@ import {
   DoubleSide,
   Group,
   Object3D,
+  Points,
   Quaternion,
   ShaderMaterial,
   Vector3,
@@ -257,23 +258,29 @@ function DeepSpace({
 
 function LocalDust({
   visual,
-  flight,
+  flightRef,
   reducedMotion,
 }: {
   visual: SpaceVisual
-  flight: FlightState
+  flightRef: RefObject<FlightState>
   reducedMotion: boolean
 }) {
   const geometry = useMemo(() => createPointGeometry(visual.dust), [visual.dust])
   const material = usePointMaterial(210, reducedMotion)
   const speeds = useMemo(() => visual.dust.map((point) => point.speed), [visual.dust])
   const geometryRef = useRef(geometry)
+  const points = useRef<Points>(null)
 
   useEffect(() => {
     geometryRef.current = geometry
     return () => geometry.dispose()
   }, [geometry])
   useFrame((_, elapsedSeconds) => {
+    const flight = flightRef.current
+    if (points.current) {
+      points.current.position.set(flight.x, flight.altitude, flight.z)
+      points.current.rotation.set(0, flight.heading, 0)
+    }
     const position = geometryRef.current.getAttribute('position') as BufferAttribute
     const motionScale = reducedMotion ? 0.28 : 1
     const flightMotion = (Math.abs(flight.speed) * 3.2 + (flight.turbo ? 7 : 0.18)) * motionScale
@@ -289,8 +296,7 @@ function LocalDust({
 
   return (
     <points
-      position={[flight.x, flight.altitude, flight.z]}
-      rotation={[0, flight.heading, 0]}
+      ref={points}
       geometry={geometry}
       material={material}
       frustumCulled={false}
@@ -303,14 +309,14 @@ export function SpaceBackground({
   seed,
   quality,
   reducedMotion,
-  flight,
+  flightRef,
   shootingStars,
   shootingStarCycleSeconds,
 }: {
   seed: number
   quality: VisualQuality
   reducedMotion: boolean
-  flight: FlightState
+  flightRef: RefObject<FlightState>
   shootingStars: ShootingStarEventVisual[]
   shootingStarCycleSeconds: number
 }) {
@@ -325,7 +331,7 @@ export function SpaceBackground({
         shootingStars={shootingStars}
         shootingStarCycleSeconds={shootingStarCycleSeconds}
       />
-      <LocalDust visual={visual} flight={flight} reducedMotion={reducedMotion} />
+      <LocalDust visual={visual} flightRef={flightRef} reducedMotion={reducedMotion} />
     </>
   )
 }

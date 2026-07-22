@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   detectAtmosphereContact,
   resolveAtmosphereCollision,
@@ -41,6 +41,7 @@ export function useFlightControls(system: GitHubSystem) {
   const simulationStartedAt = useState(() => performance.now())[0]
   const [flight, setFlight] = useState(initialFlight.state)
   const flightState = useRef<FlightState>(initialFlight.state)
+  const previousFrameTime = useRef(simulationStartedAt)
   const initialActiveBody = useState(() =>
     selectActiveCelestialBody(system, initialFlight.state, 0),
   )[0]
@@ -79,65 +80,63 @@ export function useFlightControls(system: GitHubSystem) {
     window.addEventListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleWindowBlur)
 
-    let animationFrame = 0
-    let previousTime = performance.now()
-    const update = (time: number) => {
-      const frameSeconds = (time - previousTime) / 1_000
-      const previousElapsedSeconds = (previousTime - simulationStartedAt) / 1_000
-      previousTime = time
-      const current = flightState.current
-      const input = flightInput.current
-      const hasInput = Object.values(input).some(Boolean)
-      const elapsedSeconds = (time - simulationStartedAt) / 1_000
-      const proposedFlight =
-        !hasInput &&
-        current.speed === 0 &&
-        current.bank === 0 &&
-        current.pitch === 0 &&
-        !current.turbo
-          ? current
-          : advanceFlight(current, input, frameSeconds)
-      const collision = resolveAtmosphereCollision(
-        system,
-        current,
-        proposedFlight,
-        previousElapsedSeconds,
-        elapsedSeconds,
-      )
-      const nextFlight = collision.flight
-
-      if (nextFlight !== current) {
-        flightState.current = nextFlight
-        setFlight(nextFlight)
-      }
-
-      const nextContact =
-        collision.contact ?? detectAtmosphereContact(system, nextFlight, elapsedSeconds)
-      if (nextContact?.key !== atmosphereContactRef.current?.key) {
-        atmosphereContactRef.current = nextContact
-        setAtmosphereContact(nextContact)
-      }
-
-      const nextActiveBody = selectActiveCelestialBody(system, nextFlight, elapsedSeconds)
-      if (nextActiveBody?.key !== activeBodyRef.current?.key) {
-        activeBodyRef.current = nextActiveBody
-        setActiveBody(nextActiveBody)
-      }
-      animationFrame = requestAnimationFrame(update)
-    }
-
-    animationFrame = requestAnimationFrame(update)
     return () => {
-      cancelAnimationFrame(animationFrame)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [system])
+
+  const advanceFlightFrame = useCallback((time: number) => {
+    const previousTime = previousFrameTime.current
+    const frameSeconds = (time - previousTime) / 1_000
+    const previousElapsedSeconds = (previousTime - simulationStartedAt) / 1_000
+    previousFrameTime.current = time
+    const current = flightState.current
+    const input = flightInput.current
+    const hasInput = Object.values(input).some(Boolean)
+    const elapsedSeconds = (time - simulationStartedAt) / 1_000
+    const proposedFlight =
+      !hasInput &&
+      current.speed === 0 &&
+      current.bank === 0 &&
+      current.pitch === 0 &&
+      !current.turbo
+        ? current
+        : advanceFlight(current, input, frameSeconds)
+    const collision = resolveAtmosphereCollision(
+      system,
+      current,
+      proposedFlight,
+      previousElapsedSeconds,
+      elapsedSeconds,
+    )
+    const nextFlight = collision.flight
+
+    if (nextFlight !== current) {
+      flightState.current = nextFlight
+      setFlight(nextFlight)
+    }
+
+    const nextContact =
+      collision.contact ?? detectAtmosphereContact(system, nextFlight, elapsedSeconds)
+    if (nextContact?.key !== atmosphereContactRef.current?.key) {
+      atmosphereContactRef.current = nextContact
+      setAtmosphereContact(nextContact)
+    }
+
+    const nextActiveBody = selectActiveCelestialBody(system, nextFlight, elapsedSeconds)
+    if (nextActiveBody?.key !== activeBodyRef.current?.key) {
+      activeBodyRef.current = nextActiveBody
+      setActiveBody(nextActiveBody)
     }
   }, [simulationStartedAt, system])
 
   return {
     experienceRef,
     flight,
+    flightState,
+    advanceFlightFrame,
     initialFlight,
     activeBody,
     atmosphereContact,

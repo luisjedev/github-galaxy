@@ -1,6 +1,13 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry } from 'three'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  PointsMaterial,
+} from 'three'
 import {
   NORMAL_FLIGHT_SPEED,
   type FlightState,
@@ -12,12 +19,10 @@ export const SHIP_WORLD_SCALE = 0.03
 
 function EngineParticles({
   hue,
-  turbo,
-  intensity,
+  flightRef,
 }: {
   hue: number
-  turbo: boolean
-  intensity: number
+  flightRef: RefObject<FlightState>
 }) {
   const geometry = useMemo(() => {
     const count = 28
@@ -42,30 +47,38 @@ function EngineParticles({
     return result
   }, [hue])
   const geometryRef = useRef(geometry)
+  const material = useRef<PointsMaterial>(null)
 
   useEffect(() => {
     geometryRef.current = geometry
     return () => geometry.dispose()
   }, [geometry])
   useFrame((_, elapsedSeconds) => {
+    const flight = flightRef.current
+    const intensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
     const position = geometryRef.current.getAttribute('position') as BufferAttribute
-    const speed = (turbo ? 11 : 3 + intensity * 4) * elapsedSeconds
+    const speed = (flight.turbo ? 11 : 3 + intensity * 4) * elapsedSeconds
     for (let index = 0; index < position.count; index += 1) {
       let z = position.getZ(index) - speed
-      const limit = turbo ? -10 : -5.5
+      const limit = flight.turbo ? -10 : -5.5
       if (z < limit) z = -2.15
       position.setZ(index, z)
     }
     position.needsUpdate = true
+    if (material.current) {
+      material.current.size = flight.turbo ? 0.006 : 0.0035
+      material.current.opacity = flight.turbo ? 0.9 : 0.5 + intensity * 0.25
+    }
   })
 
   return (
     <points geometry={geometry}>
       <pointsMaterial
+        ref={material}
         vertexColors
-        size={turbo ? 0.006 : 0.0035}
+        size={0.0035}
         transparent
-        opacity={turbo ? 0.9 : 0.5 + intensity * 0.25}
+        opacity={0.5}
         depthWrite={false}
         toneMapped={false}
       />
@@ -73,17 +86,62 @@ function EngineParticles({
   )
 }
 
+function EngineTrail({
+  side,
+  accentHue,
+  flightRef,
+}: {
+  side: number
+  accentHue: number
+  flightRef: RefObject<FlightState>
+}) {
+  const mesh = useRef<Mesh>(null)
+  const material = useRef<MeshBasicMaterial>(null)
+
+  useFrame(() => {
+    const flight = flightRef.current
+    const intensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
+    const trailLength = flight.turbo ? 8.5 : 2.3 + intensity * 2.8
+    mesh.current?.position.set(side * 0.72, -0.05, -2.38 - trailLength / 2)
+    mesh.current?.scale.set(0.4 + intensity * 0.17, trailLength, 0.4 + intensity * 0.17)
+    if (material.current) {
+      material.current.opacity = flight.turbo ? 0.88 : 0.32 + intensity * 0.4
+    }
+  })
+
+  return (
+    <mesh ref={mesh} rotation={[-Math.PI / 2, 0, 0]}>
+      <coneGeometry args={[0.72, 1, 5]} />
+      <meshBasicMaterial
+        ref={material}
+        color={hsl(accentHue, 100, 68)}
+        transparent
+        opacity={0.32}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
+  )
+}
+
 export function ProceduralShip({
-  flight,
+  flightRef,
   primaryHue,
   accentHue,
 }: {
-  flight: FlightState
+  flightRef: RefObject<FlightState>
   primaryHue: number
   accentHue: number
 }) {
-  const engineIntensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
-  const trailLength = flight.turbo ? 8.5 : 2.3 + engineIntensity * 2.8
+  const ship = useRef<Group>(null)
+  const attitude = useRef<Group>(null)
+
+  useFrame(() => {
+    const flight = flightRef.current
+    ship.current?.position.set(flight.x, flight.altitude, flight.z)
+    if (ship.current) ship.current.rotation.y = flight.heading
+    attitude.current?.rotation.set(flight.pitch, 0, flight.bank)
+  }, -50)
   const hullMaterial = (
     <meshStandardMaterial
       color={hsl(primaryHue, 68, 56)}
@@ -106,12 +164,8 @@ export function ProceduralShip({
   )
 
   return (
-    <group
-      position={[flight.x, flight.altitude, flight.z]}
-      rotation={[0, flight.heading, 0]}
-      scale={SHIP_WORLD_SCALE}
-    >
-      <group rotation={[flight.pitch, 0, flight.bank]}>
+    <group ref={ship} scale={SHIP_WORLD_SCALE}>
+      <group ref={attitude}>
         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
           <coneGeometry args={[1.05, 4.2, 5]} />
           {hullMaterial}
@@ -159,24 +213,7 @@ export function ProceduralShip({
                 toneMapped={false}
               />
             </mesh>
-            <mesh
-              position={[side * 0.72, -0.05, -2.38 - trailLength / 2]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              scale={[
-                0.4 + engineIntensity * 0.17,
-                trailLength,
-                0.4 + engineIntensity * 0.17,
-              ]}
-            >
-              <coneGeometry args={[0.72, 1, 5]} />
-              <meshBasicMaterial
-                color={hsl(accentHue, 100, 68)}
-                transparent
-                opacity={flight.turbo ? 0.88 : 0.32 + engineIntensity * 0.4}
-                depthWrite={false}
-                toneMapped={false}
-              />
-            </mesh>
+            <EngineTrail side={side} accentHue={accentHue} flightRef={flightRef} />
           </group>
         ))}
 
@@ -204,7 +241,7 @@ export function ProceduralShip({
           intensity={2.2}
           distance={7}
         />
-        <EngineParticles hue={accentHue} turbo={flight.turbo} intensity={engineIntensity} />
+        <EngineParticles hue={accentHue} flightRef={flightRef} />
       </group>
     </group>
   )

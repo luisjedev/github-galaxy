@@ -395,6 +395,8 @@ function Exploration({ system }: { system: GitHubSystem }) {
   const {
     experienceRef,
     flight,
+    flightState,
+    advanceFlightFrame,
     initialFlight,
     activeBody,
     atmosphereContact,
@@ -423,7 +425,9 @@ function Exploration({ system }: { system: GitHubSystem }) {
 
       <GalaxyScene
         system={system}
-        flight={flight}
+        initialFlight={initialFlight.state}
+        flightRef={flightState}
+        advanceFlightFrame={advanceFlightFrame}
         simulationStartedAt={simulationStartedAt}
         onMarkersChange={setOrientationMarkers}
       />

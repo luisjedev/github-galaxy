@@ -33,7 +33,7 @@ function createStarGeometry(
     const color = colorFromHsl(
       hue,
       useAccent ? 0.96 : 0.9,
-      useAccent ? 0.48 + variation * 0.12 : 0.58 + variation * 0.24,
+      useAccent ? 0.62 + variation * 0.16 : 0.72 + variation * 0.2,
     )
     for (let vertex = 0; vertex < 3; vertex += 1) {
       colors.set([color.r, color.g, color.b], (face * 3 + vertex) * 3)
@@ -47,6 +47,7 @@ function createStarGeometry(
 
 function StarFlares({ appearance, quality }: { appearance: StarAppearance; quality: VisualQuality }) {
   const count = quality === 'normal' ? 10 : 4
+  const flareUnit = STAR_RADIUS / 4
   const mesh = useRef<InstancedMesh>(null)
 
   useLayoutEffect(() => {
@@ -60,18 +61,18 @@ function StarFlares({ appearance, quality }: { appearance: StarAppearance; quali
         deterministicUnit(appearance.facetSeed, index, 32) * 2 - 1,
       ).normalize()
       const height = (0.28 + deterministicUnit(appearance.facetSeed, index, 33) * 0.48) * appearance.flareScale
-      helper.position.copy(direction).multiplyScalar(STAR_RADIUS + height * 0.35)
+      helper.position.copy(direction).multiplyScalar(STAR_RADIUS + height * flareUnit * 0.35)
       helper.quaternion.setFromUnitVectors(up, direction)
       helper.scale.set(0.65 + height * 0.25, height, 0.65 + height * 0.25)
       helper.updateMatrix()
       mesh.current.setMatrixAt(index, helper.matrix)
     }
     mesh.current.instanceMatrix.needsUpdate = true
-  }, [appearance, count])
+  }, [appearance, count, flareUnit])
 
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, count]}>
-      <coneGeometry args={[0.34, 1, 4]} />
+      <coneGeometry args={[0.34 * flareUnit, flareUnit, 4]} />
       <meshBasicMaterial
         color={hsl(appearance.coronaHue, 96, 66)}
         transparent
@@ -114,9 +115,9 @@ export function ProceduralStar({
       <mesh ref={core} geometry={geometry}>
         <meshStandardMaterial
           vertexColors
-          emissive={hsl(appearance.primaryHue - 6, 100, 50)}
-          emissiveIntensity={0.75 * appearance.luminosity}
-          roughness={0.9}
+          emissive={hsl(appearance.primaryHue - 4, 100, 56)}
+          emissiveIntensity={1.1 * appearance.luminosity}
+          roughness={0.72}
           metalness={0}
           toneMapped={false}
         />

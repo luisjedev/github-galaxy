@@ -5,7 +5,7 @@ import {
   type PlanetDescriptor,
 } from './github-system'
 
-export const STAR_RADIUS = 4
+export const STAR_RADIUS = 8
 export const CELESTIAL_COLLISION_CLEARANCE = 0.2
 export const CELESTIAL_ATMOSPHERE_CLEARANCE = 2
 export const INFORMATION_ZONE_CLEARANCE = 6
@@ -218,13 +218,16 @@ export function resolveAtmosphereCollision(
     }
   }
 
-  const relativeContact = add(
+  let relativeContact = add(
     firstCollision.relativeStart,
     scale(firstCollision.relativeMovement, firstCollision.time),
   )
   const normalLength =
     Math.hypot(relativeContact.x, relativeContact.y, relativeContact.z) || 1
   const contactNormal = scale(relativeContact, 1 / normalLength)
+  if (normalLength < firstCollision.body.radius) {
+    relativeContact = scale(contactNormal, firstCollision.body.radius)
+  }
   const relativeEnd = subtract(proposed, firstCollision.body.position)
   const remainingRelativeMovement = subtract(relativeEnd, relativeContact)
   const inwardMovement = Math.min(0, dot(remainingRelativeMovement, contactNormal))
