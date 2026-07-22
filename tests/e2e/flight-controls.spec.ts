@@ -72,8 +72,20 @@ test('muestra una única nave procedural determinista, la cámara de seguimiento
   await expect(ship).toHaveAttribute('data-primary-hue', '16')
   await expect(ship).toHaveAttribute('data-accent-hue', '215')
   await expect(ship).toHaveAttribute('data-world-scale', '0.03')
-  await expect(ship).toHaveAttribute('data-initial-destination', '1')
-  expect(await numberAttribute(page, 'data-heading')).toBeCloseTo(1.178, 2)
+  await expect(ship).toHaveAttribute('data-initial-destination', 'star')
+  const outermostOrbitRadius = Math.max(
+    ...(await page.locator('[data-orbit-radius]').evaluateAll((orbits) =>
+      orbits.map((orbit) => Number(orbit.getAttribute('data-orbit-radius'))),
+    )),
+  )
+  const spawnX = await numberAttribute(page, 'data-x')
+  const spawnZ = await numberAttribute(page, 'data-z')
+  expect(Math.hypot(spawnX, spawnZ)).toBeCloseTo(outermostOrbitRadius, 2)
+  expect(await numberAttribute(page, 'data-altitude')).toBe(7)
+  expect(await numberAttribute(page, 'data-heading')).toBeCloseTo(
+    Math.atan2(-spawnX, -spawnZ),
+    2,
+  )
   await expect(
     page.getByRole('img', {
       name: 'Escena tridimensional con cámara automática siguiendo la nave',

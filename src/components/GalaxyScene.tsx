@@ -250,7 +250,7 @@ function SystemScene({
       <hemisphereLight args={['#8096c9', '#130d20', 0.34]} />
       <pointLight
         color={hsl(starAppearance.coronaHue, 92, 64)}
-        intensity={34 * starAppearance.luminosity}
+        intensity={48 * starAppearance.luminosity}
         distance={extent * 2.35}
         decay={1.45}
       />
@@ -320,7 +320,11 @@ export function GalaxyScene({
     >
       <Canvas
         camera={{
-          position: [0, CHASE_CAMERA_HEIGHT, -10 - CHASE_CAMERA_BACK_DISTANCE],
+          position: [
+            flight.x - Math.sin(flight.heading) * CHASE_CAMERA_BACK_DISTANCE,
+            flight.altitude + CHASE_CAMERA_HEIGHT,
+            flight.z - Math.cos(flight.heading) * CHASE_CAMERA_BACK_DISTANCE,
+          ],
           fov: 64,
           near: 0.1,
           far: farPlane,

@@ -43,7 +43,7 @@ async function numberAttribute(page: Page, name: string) {
   return Number(value)
 }
 
-test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separarse', async ({
+test('el avance descendente se detiene ante la atmósfera y la nave puede separarse', async ({
   page,
 }) => {
   await interceptGitHub(page)
@@ -58,7 +58,7 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
   expect(atmosphereRadius).toBeGreaterThan(collisionRadius)
 
   await page.keyboard.down('w')
-  await page.keyboard.down(' ')
+  await page.keyboard.down('j')
 
   const warning = page.getByRole('alert', { name: 'Peligro atmosférico' })
   await expect(warning).toContainText('La nave no está preparada para atravesar la atmósfera', {
@@ -72,15 +72,23 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
   await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBe(0)
   const contactX = await numberAttribute(page, 'data-x')
   const contactZ = await numberAttribute(page, 'data-z')
-  expect(Math.hypot(contactX, contactZ)).toBeGreaterThanOrEqual(collisionRadius - 0.01)
+  const contactAltitude = await numberAttribute(page, 'data-altitude')
+  expect(Math.hypot(contactX, contactAltitude, contactZ)).toBeGreaterThanOrEqual(
+    collisionRadius - 0.01,
+  )
   expect(contactZ).toBeLessThan(0)
 
   await page.waitForTimeout(500)
-  expect(await numberAttribute(page, 'data-x')).toBeCloseTo(contactX, 1)
-  expect(await numberAttribute(page, 'data-z')).toBeCloseTo(contactZ, 1)
+  expect(
+    Math.hypot(
+      await numberAttribute(page, 'data-x'),
+      await numberAttribute(page, 'data-altitude'),
+      await numberAttribute(page, 'data-z'),
+    ),
+  ).toBeGreaterThanOrEqual(collisionRadius - 0.01)
   expect(await numberAttribute(page, 'data-speed')).toBe(0)
 
-  await page.keyboard.up(' ')
+  await page.keyboard.up('j')
   await page.keyboard.up('w')
   await page.keyboard.down('s')
   await expect
@@ -96,29 +104,26 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
   await expect(warning).toHaveCount(0)
 })
 
-test('los planetas orbitales aplican el mismo límite atmosférico', async ({ page }) => {
+test('el respawn sobre la última órbita queda fuera de la atmósfera planetaria', async ({
+  page,
+}) => {
   await interceptGitHub(page, repositories)
   await page.goto('/?user=pilot')
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
-  await page.keyboard.down('w')
-  await page.keyboard.down(' ')
+  const planet = page.locator('[data-repository-id="1"]')
+  const orbitRadius = Number(await planet.getAttribute('data-orbit-radius'))
+  const collisionRadius = Number(await planet.getAttribute('data-collision-radius'))
+  const atmosphereRadius = Number(await planet.getAttribute('data-atmosphere-radius'))
+  const spawnX = await numberAttribute(page, 'data-x')
+  const spawnZ = await numberAttribute(page, 'data-z')
 
-  const warning = page.getByRole('alert', { name: 'Peligro atmosférico' })
-  await expect(warning).toBeVisible()
+  expect(Math.hypot(spawnX, spawnZ)).toBeCloseTo(orbitRadius, 2)
+  expect(await numberAttribute(page, 'data-altitude')).toBe(7)
+  expect(atmosphereRadius).toBeGreaterThan(collisionRadius)
   await expect(page.getByTestId('flight-state')).toHaveAttribute(
     'data-atmosphere-contact',
-    'planet:1',
+    'none',
   )
-  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBe(0)
-
-  const contactX = await numberAttribute(page, 'data-x')
-  await page.keyboard.up(' ')
-  await page.keyboard.up('w')
-  await page.keyboard.down('s')
-  await expect
-    .poll(async () => await numberAttribute(page, 'data-x'))
-    .toBeLessThan(contactX - 0.1)
-  await page.keyboard.up('s')
-  await expect(warning).toBeVisible()
+  await expect(page.getByRole('alert', { name: 'Peligro atmosférico' })).toHaveCount(0)
 })

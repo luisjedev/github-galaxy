@@ -41,7 +41,8 @@ export const idleFlightInput: FlightInput = {
   turbo: false,
 }
 
-const SPAWN_DISTANCE = 10
+const EMPTY_SYSTEM_SPAWN_DISTANCE = 10
+const SPAWN_ALTITUDE = 7
 const FORWARD_ACCELERATION = 2
 const BRAKE_DECELERATION = 2
 const REVERSE_ACCELERATION = 0.35
@@ -68,30 +69,30 @@ function animateAttitude(current: number, target: number, elapsed: number): numb
 }
 
 export function createInitialFlight(system: GitHubSystem): InitialFlight {
-  const destination = [...system.planets].sort(
-    (left, right) => left.orbitRadius - right.orbitRadius,
-  )[0]
-  const x = 0
-  const z = -SPAWN_DISTANCE
-  const destinationX = destination
-    ? Math.cos(destination.initialPhase) * destination.orbitRadius
+  const outermostPlanet = system.planets.reduce<(typeof system.planets)[number] | null>(
+    (outermost, planet) =>
+      !outermost || planet.orbitRadius > outermost.orbitRadius ? planet : outermost,
+    null,
+  )
+  const x = outermostPlanet
+    ? Math.cos(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
     : 0
-  const destinationZ = destination
-    ? -Math.sin(destination.initialPhase) * destination.orbitRadius
-    : 0
+  const z = outermostPlanet
+    ? -Math.sin(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
+    : -EMPTY_SYSTEM_SPAWN_DISTANCE
 
   return {
     state: {
       x,
       z,
-      altitude: 0,
-      heading: Math.atan2(destinationX - x, destinationZ - z),
+      altitude: SPAWN_ALTITUDE,
+      heading: Math.atan2(-x, -z) || 0,
       bank: 0,
       pitch: 0,
       speed: 0,
       turbo: false,
     },
-    destinationRepositoryId: destination?.repository.id ?? null,
+    destinationRepositoryId: null,
   }
 }
 

@@ -492,6 +492,9 @@ function Exploration({ system }: { system: GitHubSystem }) {
           data-star-seed={starSeed}
           data-primary-hue={starAppearance.primaryHue}
           data-language-families={starAppearance.languageFamilies.join(',')}
+          data-stellar-palette="solar"
+          data-visual-atmosphere="none"
+          data-luminosity={starAppearance.luminosity}
           data-body-radius={STAR_RADIUS}
           data-collision-radius={collisionRadius(STAR_RADIUS)}
           data-atmosphere-radius={atmosphereRadius(STAR_RADIUS)}

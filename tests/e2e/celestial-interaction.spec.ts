@@ -73,8 +73,22 @@ test('muestra la ficha completa de la estrella y E abre el perfil explícitament
   await interceptDestinations(context)
   await interceptGitHub(page, [])
   await page.goto('/?user=pilot')
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
 
   const card = page.getByRole('complementary', { name: 'Ficha de Galaxy Pilot' })
+  await page.keyboard.down('w')
+  await page.keyboard.down('j')
+  await expect
+    .poll(async () =>
+      Math.hypot(
+        Number(await page.getByTestId('flight-state').getAttribute('data-x')),
+        Number(await page.getByTestId('flight-state').getAttribute('data-altitude')),
+        Number(await page.getByTestId('flight-state').getAttribute('data-z')),
+      ),
+    )
+    .toBeLessThan(9)
+  await page.keyboard.up('j')
+  await page.keyboard.up('w')
   await expect(card).toBeVisible()
   await expectInformationOutsideAtmosphere(page.getByLabel('Estrella de pilot'))
   await expect(card.getByRole('img', { name: 'Avatar de Galaxy Pilot' })).toHaveAttribute(
@@ -113,29 +127,21 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
   await page.goto('/?user=pilot')
 
   const cards = page.getByRole('complementary', { name: /^Ficha de/ })
-  const card = page.getByRole('complementary', { name: 'Ficha de typescript-flight' })
-  await expect(cards).toHaveCount(1)
-  const starCard = page.getByRole('complementary', { name: 'Ficha de Galaxy Pilot' })
-  if (await starCard.isVisible()) {
-    await page.keyboard.down('w')
-    await page.keyboard.down(' ')
-    await expect(card).toBeVisible({ timeout: 8_000 })
-    await page.keyboard.up(' ')
-    await page.keyboard.up('w')
-  }
+  const outermostRepository = repositories[1]
+  const card = page.getByRole('complementary', { name: 'Ficha de rust-engine' })
 
   await expect(cards).toHaveCount(1)
   await expect(card).toBeVisible()
-  await expectInformationOutsideAtmosphere(page.locator('[data-repository-id="1"]'))
-  await expect(card).toContainText('Controles de vuelo para explorar el espacio.')
-  await expect(card).toContainText('TypeScript')
-  await expect(card).toContainText('10 estrellas')
-  await expect(card).toContainText('3 forks')
-  await expect(card).toContainText('120 KB')
-  await expect(card.locator('time')).toHaveAttribute('datetime', repositories[0].updated_at)
+  await expectInformationOutsideAtmosphere(page.locator('[data-repository-id="2"]'))
+  await expect(card).toContainText('Un motor orbital.')
+  await expect(card).toContainText('Rust')
+  await expect(card).toContainText('4 estrellas')
+  await expect(card).toContainText('1 forks')
+  await expect(card).toContainText('80 KB')
+  await expect(card.locator('time')).toHaveAttribute('datetime', outermostRepository.updated_at)
   await expect(card.getByRole('link', { name: 'Ver repositorio en GitHub' })).toHaveAttribute(
     'href',
-    repositories[0].html_url,
+    outermostRepository.html_url,
   )
 
   await page.waitForTimeout(300)
@@ -145,7 +151,7 @@ test('selecciona una única ficha planetaria y solo E abre su repositorio en otr
   const popupPromise = context.waitForEvent('page')
   await page.keyboard.press('e')
   const popup = await popupPromise
-  await expect.poll(() => popup.url()).toBe(repositories[0].html_url)
+  await expect.poll(() => popup.url()).toBe(outermostRepository.html_url)
   await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
   await popup.close()
 

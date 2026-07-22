@@ -86,17 +86,21 @@ export function ProceduralShip({
   const trailLength = flight.turbo ? 8.5 : 2.3 + engineIntensity * 2.8
   const hullMaterial = (
     <meshStandardMaterial
-      color={hsl(primaryHue, 68, 42)}
-      metalness={0.42}
-      roughness={0.4}
+      color={hsl(primaryHue, 68, 56)}
+      emissive={hsl(primaryHue, 72, 32)}
+      emissiveIntensity={0.22}
+      metalness={0.38}
+      roughness={0.36}
       flatShading
     />
   )
   const darkHullMaterial = (
     <meshStandardMaterial
-      color={hsl(primaryHue, 46, 24)}
-      metalness={0.5}
-      roughness={0.44}
+      color={hsl(primaryHue, 50, 38)}
+      emissive={hsl(primaryHue, 62, 24)}
+      emissiveIntensity={0.16}
+      metalness={0.44}
+      roughness={0.4}
       flatShading
     />
   )
@@ -178,7 +182,13 @@ export function ProceduralShip({
 
         <mesh position={[0, -0.24, 1.28]} rotation={[Math.PI / 2, 0, 0]}>
           <coneGeometry args={[0.22, 0.72, 4]} />
-          <meshStandardMaterial color={hsl(primaryHue, 54, 26)} metalness={0.45} roughness={0.4} />
+          <meshStandardMaterial
+            color={hsl(primaryHue, 54, 40)}
+            emissive={hsl(primaryHue, 62, 24)}
+            emissiveIntensity={0.16}
+            metalness={0.42}
+            roughness={0.38}
+          />
         </mesh>
         <mesh position={[-1.78, 0.04, -0.2]}>
           <octahedronGeometry args={[0.12, 0]} />

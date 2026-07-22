@@ -346,15 +346,20 @@ function describeStarAppearance(planets: PlanetDescriptor[], starSeed: number): 
   const technologyHues = languageFamilies.map(
     (languageFamily) => languagePalette(languageFamily).baseHue,
   )
-  const primaryHue = technologyHues[0] ?? starSeed % 360
+  // A star may retain a stable temperature variation from the profile, but it
+  // must always read as a hot solar body rather than as a planet in the
+  // repository language palette.
+  const primaryHue = 24 + ((technologyHues[0] ?? starSeed) % 11)
+  const coronaHue = 18 + ((technologyHues[1] ?? (starSeed >>> 8)) % 11)
+  const accentHue = 2 + ((technologyHues[2] ?? (starSeed >>> 16)) % 13)
 
   return {
     languageFamilies,
     technologyHues,
     primaryHue,
-    coronaHue: technologyHues[1] ?? (primaryHue + 32 + (starSeed % 23)) % 360,
-    accentHue: technologyHues[2] ?? (primaryHue + 160 + (starSeed % 31)) % 360,
-    luminosity: Number((0.9 + (starSeed % 16) / 100).toFixed(2)),
+    coronaHue,
+    accentHue,
+    luminosity: Number((1.7 + (starSeed % 21) / 100).toFixed(2)),
     flareScale: Number((0.82 + (starSeed % 29) / 100).toFixed(2)),
     facetSeed: stableSeedParts('star-facets', starSeed),
   }

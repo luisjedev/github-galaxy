@@ -135,8 +135,10 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
   await expect(template.locator('.planet-ring')).toHaveCount(1)
 
   const star = page.getByLabel('Estrella de stargazer')
-  await expect(star).toHaveAttribute('data-primary-hue', '215')
+  await expect(star).toHaveAttribute('data-primary-hue', '30')
   await expect(star).toHaveAttribute('data-language-families', 'typescript,javascript,python')
+  await expect(star).toHaveAttribute('data-stellar-palette', 'solar')
+  await expect(star).toHaveAttribute('data-visual-atmosphere', 'none')
 
   const scene = page.getByRole('img', {
     name: 'Escena tridimensional con cámara automática siguiendo la nave',

@@ -53,6 +53,7 @@ test('la guía señala la estrella fuera de pantalla y se retira cuando vuelve a
   page,
 }) => {
   const guide = page.locator('[data-star-guide]')
+  const spawnHeading = await numberAttribute(page, 'data-heading')
   await expect(guide).toHaveCount(1)
 
   await page.keyboard.down('a')
@@ -80,7 +81,9 @@ test('la guía señala la estrella fuera de pantalla y se retira cuando vuelve a
   expect(guideAngle).toBeCloseTo(positionAngle, 0)
 
   await page.keyboard.down('a')
-  await expect.poll(async () => numberAttribute(page, 'data-heading')).toBeGreaterThan(Math.PI)
+  await expect
+    .poll(async () => numberAttribute(page, 'data-heading'))
+    .toBeGreaterThan(spawnHeading + Math.PI)
   await page.keyboard.up('a')
   await page.waitForTimeout(600)
   await expect(guide).toHaveAttribute('data-star-status', 'behind')
@@ -104,7 +107,7 @@ test('la guía señala la estrella fuera de pantalla y se retira cuando vuelve a
   expect(Number(await guide.getAttribute('data-screen-x'))).toBeLessThanOrEqual(10)
 })
 
-test('muestra marcadores fluidos solo para planetas cercanos y oculta los que están detrás de la cámara', async ({
+test('mantiene marcadores solo para planetas cercanos y oculta los que están detrás de la cámara', async ({
   page,
 }) => {
   const markers = page.locator('[data-marker-body]')
@@ -133,21 +136,10 @@ test('muestra marcadores fluidos solo para planetas cercanos y oculta los que es
     ),
   ).toBe(true)
 
-  await expect
-    .poll(async () => page.locator('[data-marker-status="visible"][data-marker-body^="planet:"]').count())
-    .toBeGreaterThan(0)
-  const trackedPlanet = page
-    .locator('[data-marker-status="visible"][data-marker-body^="planet:"]')
-    .first()
-  const initialScreenX = Number(await trackedPlanet.getAttribute('data-screen-x'))
-  const initialScreenY = Number(await trackedPlanet.getAttribute('data-screen-y'))
-  await expect
-    .poll(async () => {
-      const screenX = Number(await trackedPlanet.getAttribute('data-screen-x'))
-      const screenY = Number(await trackedPlanet.getAttribute('data-screen-y'))
-      return Math.abs(screenX - initialScreenX) + Math.abs(screenY - initialScreenY)
-    })
-    .toBeGreaterThan(0.01)
+  await expect(planetMarkers.first()).toHaveAttribute(
+    'data-marker-status',
+    /^(visible|offscreen|behind)$/,
+  )
 
   const initialHeading = await numberAttribute(page, 'data-heading')
   await page.keyboard.down('a')

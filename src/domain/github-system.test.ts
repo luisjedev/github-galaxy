@@ -188,6 +188,13 @@ describe('createGitHubSystem', () => {
       technologyHues: [215, 16],
     })
     expect(star.primaryHue).not.toBe(differentTechnology.primaryHue)
+    expect(star.primaryHue).toBeGreaterThanOrEqual(24)
+    expect(star.primaryHue).toBeLessThanOrEqual(34)
+    expect(star.coronaHue).toBeGreaterThanOrEqual(18)
+    expect(star.coronaHue).toBeLessThanOrEqual(28)
+    expect(star.accentHue).toBeGreaterThanOrEqual(2)
+    expect(star.accentHue).toBeLessThanOrEqual(14)
+    expect(star.luminosity).toBeGreaterThanOrEqual(1.7)
   })
 
   test('produce fases, rotaciones y órbitas lentas reproducibles sin depender del orden de entrada', () => {

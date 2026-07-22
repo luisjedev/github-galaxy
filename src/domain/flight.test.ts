@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   advanceFlight,
+  createInitialFlight,
   idleFlightInput,
   NORMAL_FLIGHT_SPEED,
   REVERSE_FLIGHT_SPEED,
@@ -8,6 +9,11 @@ import {
   type FlightInput,
   type FlightState,
 } from './flight'
+import {
+  createGitHubSystem,
+  type GitHubProfile,
+  type GitHubRepository,
+} from './github-system'
 
 const idleState: FlightState = {
   x: 0,
@@ -35,6 +41,71 @@ function advanceRepeatedly(
   }
   return next
 }
+
+const profile: GitHubProfile = {
+  id: 1,
+  login: 'pilot',
+  name: 'Pilot',
+  avatar_url: 'https://avatars.example/pilot.png',
+  html_url: 'https://github.com/pilot',
+  bio: null,
+  followers: 0,
+  public_repos: 20,
+}
+
+function repository(id: number): GitHubRepository {
+  return {
+    id,
+    name: `repository-${id}`,
+    html_url: `https://github.com/pilot/repository-${id}`,
+    description: null,
+    fork: false,
+    archived: false,
+    is_template: false,
+    language: 'TypeScript',
+    stargazers_count: id,
+    forks_count: 0,
+    size: id * 10,
+    updated_at: `2025-01-${String(id).padStart(2, '0')}T00:00:00Z`,
+  }
+}
+
+describe('createInitialFlight', () => {
+  test('aparece a altura 7 sobre la última órbita y mirando hacia la estrella', () => {
+    const system = createGitHubSystem(
+      profile,
+      Array.from({ length: 20 }, (_, index) => repository(index + 1)),
+    )
+    const outermostPlanet = [...system.planets].sort(
+      (left, right) => right.orbitRadius - left.orbitRadius,
+    )[0]
+    const x = Math.cos(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
+    const z = -Math.sin(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
+
+    expect(createInitialFlight(system)).toEqual({
+      state: {
+        x,
+        z,
+        altitude: 7,
+        heading: Math.atan2(-x, -z),
+        bank: 0,
+        pitch: 0,
+        speed: 0,
+        turbo: false,
+      },
+      destinationRepositoryId: null,
+    })
+  })
+
+  test('conserva un punto seguro a altura 7 cuando el sistema no tiene planetas', () => {
+    expect(createInitialFlight(createGitHubSystem(profile, [])).state).toMatchObject({
+      x: 0,
+      z: -10,
+      altitude: 7,
+      heading: 0,
+    })
+  })
+})
 
 describe('advanceFlight', () => {
   test('A gira a la izquierda y levanta el ala derecha; D hace lo contrario', () => {
