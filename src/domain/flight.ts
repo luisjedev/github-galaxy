@@ -5,6 +5,8 @@ export interface FlightState {
   z: number
   altitude: number
   heading: number
+  bank: number
+  pitch: number
   speed: number
   turbo: boolean
 }
@@ -40,20 +42,28 @@ export const idleFlightInput: FlightInput = {
 }
 
 const SPAWN_DISTANCE = 10
-const FORWARD_ACCELERATION = 16
-const REVERSE_ACCELERATION = 13
-const COAST_DECELERATION = 5
-const FORWARD_SPEED = 12
-const REVERSE_SPEED = 5
-const TURBO_SPEED = 24
+const FORWARD_ACCELERATION = 10
+const REVERSE_ACCELERATION = 8
+const COAST_DECELERATION = 3
+const FORWARD_SPEED = 8
+const REVERSE_SPEED = 3.5
+const TURBO_SPEED = 15
 const TURN_SPEED = 1.9
 const ALTITUDE_SPEED = 7
 const ALTITUDE_LIMIT = 40
+const MAX_BANK = 0.58
+const MAX_PITCH = 0.4
+const ATTITUDE_RESPONSE = 8
 
 function approachZero(value: number, amount: number): number {
   if (value > 0) return Math.max(0, value - amount)
   if (value < 0) return Math.min(0, value + amount)
   return 0
+}
+
+function animateAttitude(current: number, target: number, elapsed: number): number {
+  const next = current + (target - current) * (1 - Math.exp(-ATTITUDE_RESPONSE * elapsed))
+  return Math.abs(next - target) < 0.001 ? target : next
 }
 
 export function createInitialFlight(system: GitHubSystem): InitialFlight {
@@ -75,6 +85,8 @@ export function createInitialFlight(system: GitHubSystem): InitialFlight {
       z,
       altitude: 0,
       heading: Math.atan2(destinationX - x, destinationZ - z),
+      bank: 0,
+      pitch: 0,
       speed: 0,
       turbo: false,
     },
@@ -105,19 +117,25 @@ export function advanceFlight(
   }
 
   speed = Math.max(-REVERSE_SPEED, Math.min(turbo ? TURBO_SPEED : FORWARD_SPEED, speed))
-  const turnDirection = Number(input.right) - Number(input.left)
+  const turnDirection = Number(input.left) - Number(input.right)
   const heading = state.heading + turnDirection * TURN_SPEED * elapsed
   const altitudeDirection = Number(input.ascend) - Number(input.descend)
   const altitude = Math.max(
     -ALTITUDE_LIMIT,
     Math.min(ALTITUDE_LIMIT, state.altitude + altitudeDirection * ALTITUDE_SPEED * elapsed),
   )
+  const targetBank = turnDirection === 0 ? 0 : -turnDirection * MAX_BANK
+  const targetPitch = altitudeDirection === 0 ? 0 : -altitudeDirection * MAX_PITCH
+  const bank = animateAttitude(state.bank, targetBank, elapsed)
+  const pitch = animateAttitude(state.pitch, targetPitch, elapsed)
 
   return {
     x: state.x + Math.sin(heading) * speed * elapsed,
     z: state.z + Math.cos(heading) * speed * elapsed,
     altitude,
     heading,
+    bank,
+    pitch,
     speed,
     turbo,
   }

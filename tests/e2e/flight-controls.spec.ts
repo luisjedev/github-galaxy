@@ -81,6 +81,7 @@ test('muestra una única nave procedural determinista, la cámara de seguimiento
   await expect(page.getByText('W / S', { exact: true })).toBeVisible()
   await expect(page.getByText('Avanzar · frenar / reversa', { exact: true })).toBeVisible()
   await expect(page.getByText('A / D', { exact: true })).toBeVisible()
+  await expect(page.getByText('Girar a la izquierda · derecha', { exact: true })).toBeVisible()
   await expect(page.getByText('J / K', { exact: true })).toBeVisible()
   await expect(page.getByText('Espacio', { exact: true })).toBeVisible()
   await expect(page.getByText('E', { exact: true })).toBeVisible()
@@ -105,15 +106,17 @@ test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', as
 
   await page.keyboard.down('a')
   await expect
-    .poll(async () => Math.abs((await numberAttribute(page, 'data-heading')) - initialHeading))
-    .toBeGreaterThan(0.1)
+    .poll(async () => await numberAttribute(page, 'data-heading'))
+    .toBeGreaterThan(initialHeading + 0.1)
+  await expect.poll(async () => await numberAttribute(page, 'data-bank')).toBeLessThan(-0.05)
   await page.keyboard.up('a')
 
   const headingAfterLeftTurn = await numberAttribute(page, 'data-heading')
   await page.keyboard.down('d')
   await expect
     .poll(async () => await numberAttribute(page, 'data-heading'))
-    .toBeGreaterThan(headingAfterLeftTurn + 0.1)
+    .toBeLessThan(headingAfterLeftTurn - 0.1)
+  await expect.poll(async () => await numberAttribute(page, 'data-bank')).toBeGreaterThan(0.05)
   await page.keyboard.up('d')
 
   const altitudeBeforeClimb = await numberAttribute(page, 'data-altitude')
@@ -121,6 +124,7 @@ test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', as
   await expect
     .poll(async () => await numberAttribute(page, 'data-altitude'))
     .toBeGreaterThan(altitudeBeforeClimb)
+  await expect.poll(async () => await numberAttribute(page, 'data-pitch')).toBeLessThan(-0.05)
   await page.keyboard.up('k')
 
   const altitudeBeforeDescent = await numberAttribute(page, 'data-altitude')
@@ -128,6 +132,7 @@ test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', as
   await expect
     .poll(async () => await numberAttribute(page, 'data-altitude'))
     .toBeLessThan(altitudeBeforeDescent)
+  await expect.poll(async () => await numberAttribute(page, 'data-pitch')).toBeGreaterThan(0.05)
   await page.keyboard.up('j')
 
   await page.keyboard.down('s')

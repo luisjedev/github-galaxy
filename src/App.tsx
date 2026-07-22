@@ -27,7 +27,7 @@ import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
 
 const controls = [
   ['W / S', 'Avanzar · frenar / reversa'],
-  ['A / D', 'Girar'],
+  ['A / D', 'Girar a la izquierda · derecha'],
   ['J / K', 'Descender · subir'],
   ['Espacio', 'Turbo'],
   ['E', 'Abrir destino'],
@@ -389,6 +389,8 @@ function Exploration({ system }: { system: GitHubSystem }) {
         data-z={flight.z.toFixed(3)}
         data-altitude={flight.altitude.toFixed(3)}
         data-heading={flight.heading.toFixed(3)}
+        data-bank={flight.bank.toFixed(3)}
+        data-pitch={flight.pitch.toFixed(3)}
         data-speed={flight.speed.toFixed(3)}
         data-turbo={flight.turbo}
         aria-label="Estado de navegación"

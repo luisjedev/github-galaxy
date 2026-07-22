@@ -83,7 +83,11 @@ export function useFlightControls(system: GitHubSystem) {
       const input = flightInput.current
       const hasInput = Object.values(input).some(Boolean)
       const nextFlight =
-        !hasInput && current.speed === 0 && !current.turbo
+        !hasInput &&
+        current.speed === 0 &&
+        current.bank === 0 &&
+        current.pitch === 0 &&
+        !current.turbo
           ? current
           : advanceFlight(current, input, frameSeconds)
 

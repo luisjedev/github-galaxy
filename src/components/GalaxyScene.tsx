@@ -49,7 +49,7 @@ function ProceduralShip({
   primaryHue: number
   accentHue: number
 }) {
-  const engineIntensity = Math.min(1, Math.abs(flight.speed) / 12)
+  const engineIntensity = Math.min(1, Math.abs(flight.speed) / 8)
   const trailLength = flight.turbo ? 7 : 2.5 + engineIntensity * 2.5
 
   return (
@@ -58,61 +58,63 @@ function ProceduralShip({
       rotation={[0, flight.heading, 0]}
       scale={0.58}
     >
-      <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[1.05, 4.2, 4]} />
-        <meshStandardMaterial
-          color={hsl(primaryHue, 72, 48)}
-          metalness={0.38}
-          roughness={0.42}
-          flatShading
-        />
-      </mesh>
-      <mesh position={[-1.65, -0.05, -0.55]} rotation={[0, -0.16, -0.08]} castShadow>
-        <boxGeometry args={[2.7, 0.16, 1.55]} />
-        <meshStandardMaterial
-          color={hsl(primaryHue, 62, 30)}
-          metalness={0.32}
-          roughness={0.5}
-          flatShading
-        />
-      </mesh>
-      <mesh position={[1.65, -0.05, -0.55]} rotation={[0, 0.16, 0.08]} castShadow>
-        <boxGeometry args={[2.7, 0.16, 1.55]} />
-        <meshStandardMaterial
-          color={hsl(primaryHue, 62, 30)}
-          metalness={0.32}
-          roughness={0.5}
-          flatShading
-        />
-      </mesh>
-      <mesh position={[0, 0.45, 0.4]}>
-        <octahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial
-          color={hsl(accentHue, 100, 78)}
-          emissive={hsl(accentHue, 100, 50)}
-          emissiveIntensity={2.2}
-          flatShading
-        />
-      </mesh>
-      <pointLight
-        position={[0, 0.45, 0.5]}
-        color={hsl(accentHue, 100, 68)}
-        intensity={3}
-        distance={9}
-      />
-      <mesh
-        position={[0, 0, -2.2 - trailLength / 2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        scale={[0.55 + engineIntensity * 0.3, trailLength, 0.55 + engineIntensity * 0.3]}
-      >
-        <coneGeometry args={[0.75, 1, 5]} />
-        <meshBasicMaterial
+      <group rotation={[flight.pitch, 0, flight.bank]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <coneGeometry args={[1.05, 4.2, 4]} />
+          <meshStandardMaterial
+            color={hsl(primaryHue, 72, 48)}
+            metalness={0.38}
+            roughness={0.42}
+            flatShading
+          />
+        </mesh>
+        <mesh position={[-1.65, -0.05, -0.55]} rotation={[0, -0.16, -0.08]} castShadow>
+          <boxGeometry args={[2.7, 0.16, 1.55]} />
+          <meshStandardMaterial
+            color={hsl(primaryHue, 62, 30)}
+            metalness={0.32}
+            roughness={0.5}
+            flatShading
+          />
+        </mesh>
+        <mesh position={[1.65, -0.05, -0.55]} rotation={[0, 0.16, 0.08]} castShadow>
+          <boxGeometry args={[2.7, 0.16, 1.55]} />
+          <meshStandardMaterial
+            color={hsl(primaryHue, 62, 30)}
+            metalness={0.32}
+            roughness={0.5}
+            flatShading
+          />
+        </mesh>
+        <mesh position={[0, 0.45, 0.4]}>
+          <octahedronGeometry args={[0.5, 0]} />
+          <meshStandardMaterial
+            color={hsl(accentHue, 100, 78)}
+            emissive={hsl(accentHue, 100, 50)}
+            emissiveIntensity={2.2}
+            flatShading
+          />
+        </mesh>
+        <pointLight
+          position={[0, 0.45, 0.5]}
           color={hsl(accentHue, 100, 68)}
-          transparent
-          opacity={0.35 + engineIntensity * 0.5}
-          depthWrite={false}
+          intensity={3}
+          distance={9}
         />
-      </mesh>
+        <mesh
+          position={[0, 0, -2.2 - trailLength / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          scale={[0.55 + engineIntensity * 0.3, trailLength, 0.55 + engineIntensity * 0.3]}
+        >
+          <coneGeometry args={[0.75, 1, 5]} />
+          <meshBasicMaterial
+            color={hsl(accentHue, 100, 68)}
+            transparent
+            opacity={0.35 + engineIntensity * 0.5}
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
     </group>
   )
 }
