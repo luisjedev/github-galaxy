@@ -78,7 +78,14 @@ function MoonInstances({ moons, detail }: { moons: MoonVisual[]; detail: 0 | 1 }
 
   if (visuals.length === 0) return null
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, visuals.length]} castShadow receiveShadow>
+    // Instance matrices move beyond the unit geometry bounds on every frame.
+    <instancedMesh
+      ref={mesh}
+      args={[undefined, undefined, visuals.length]}
+      castShadow
+      receiveShadow
+      frustumCulled={false}
+    >
       <icosahedronGeometry args={[1, detail]} />
       <meshStandardMaterial
         color="white"
@@ -94,7 +101,9 @@ function MoonInstances({ moons, detail }: { moons: MoonVisual[]; detail: 0 | 1 }
 function PlanetaryRings({ ring }: { ring: PlanetaryRingVisual | null }) {
   if (!ring) return null
   return (
-    <group rotation={[ring.inclination, ring.ascendingNode, 0]} renderOrder={1}>
+    // Render before additive ship trails and write depth so their transparent
+    // pixels are composited according to distance instead of draw order.
+    <group rotation={[ring.inclination, ring.ascendingNode, 0]} renderOrder={-1}>
       {ring.bands.map((band) => (
         <mesh key={`${band.radius}:${band.width}`} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[band.radius, band.width / 2, 4, 72]} />
@@ -104,7 +113,7 @@ function PlanetaryRings({ ring }: { ring: PlanetaryRingVisual | null }) {
             emissiveIntensity={0.16}
             transparent
             opacity={band.opacity}
-            depthWrite={false}
+            depthWrite
             side={DoubleSide}
             roughness={0.82}
             flatShading
@@ -169,7 +178,12 @@ function ArtificialPartInstances({
 
   if (visuals.length === 0) return null
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, visuals.length]}>
+    // Orbiting instances leave the source geometry bounds after the first frame.
+    <instancedMesh
+      ref={mesh}
+      args={[undefined, undefined, visuals.length]}
+      frustumCulled={false}
+    >
       {part === 'body' ? <boxGeometry args={[1, 1, 1]} /> : null}
       {part === 'panel' ? <boxGeometry args={[1, 1, 1]} /> : null}
       {part === 'probe' ? <coneGeometry args={[1, 1, 5]} /> : null}
@@ -202,7 +216,10 @@ export function PlanetaryCompanions({
       <MoonInstances moons={visual.moons} detail={0} />
       <MoonInstances moons={visual.moons} detail={1} />
       {quality === 'normal' && visual.moons.length === 1 ? (
-        <mesh rotation={[Math.PI / 2 + visual.moons[0].inclination, visual.moons[0].ascendingNode, 0]}>
+        <mesh
+          rotation={[Math.PI / 2 + visual.moons[0].inclination, visual.moons[0].ascendingNode, 0]}
+          renderOrder={-2}
+        >
           <torusGeometry args={[visual.moons[0].orbitRadius, 0.006, 3, 64]} />
           <meshBasicMaterial color="#b8c1dc" transparent opacity={0.07} depthWrite={false} />
         </mesh>
