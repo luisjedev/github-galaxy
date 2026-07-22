@@ -71,6 +71,7 @@ test('muestra una única nave procedural determinista, la cámara de seguimiento
   await expect(ship).toHaveCount(1)
   await expect(ship).toHaveAttribute('data-primary-hue', '16')
   await expect(ship).toHaveAttribute('data-accent-hue', '215')
+  await expect(ship).toHaveAttribute('data-world-scale', '0.03')
   await expect(ship).toHaveAttribute('data-initial-destination', '1')
   expect(await numberAttribute(page, 'data-heading')).toBeCloseTo(1.178, 2)
   await expect(

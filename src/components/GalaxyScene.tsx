@@ -29,8 +29,18 @@ export interface CelestialMarkerState {
   direction?: Point2D
 }
 
-const MAX_PLANET_MARKERS = 5
-const MARKER_UPDATE_INTERVAL_MS = 100
+const PLANET_MARKER_DISCOVERY_CLEARANCE = 14
+export const SHIP_WORLD_SCALE = 0.03
+// Scale the chase rig with the ship so its screen-space composition stays unchanged.
+const SHIP_CAMERA_COMPOSITION_SCALE = SHIP_WORLD_SCALE / 0.06
+const CHASE_CAMERA_BACK_DISTANCE = 0.85 * SHIP_CAMERA_COMPOSITION_SCALE
+const CHASE_CAMERA_HEIGHT = 0.22 * SHIP_CAMERA_COMPOSITION_SCALE
+const CHASE_CAMERA_LOOK_DISTANCE = 7 * SHIP_CAMERA_COMPOSITION_SCALE
+const CHASE_CAMERA_LOOK_HEIGHT = 0.05 * SHIP_CAMERA_COMPOSITION_SCALE
+
+function planetMarkerDiscoveryRadius(planetRadius: number): number {
+  return planetRadius + PLANET_MARKER_DISCOVERY_CLEARANCE
+}
 
 function hsl(hue: number, saturation: number, lightness: number) {
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`
@@ -53,18 +63,18 @@ function ChaseCamera({ flight }: { flight: FlightState }) {
     const forwardY = -Math.sin(cameraPitch.current)
     const forwardZ = Math.cos(flight.heading) * horizontalForward
     desiredPosition.current.set(
-      flight.x - forwardX * 0.85,
-      flight.altitude + 0.22 - forwardY * 0.85,
-      flight.z - forwardZ * 0.85,
+      flight.x - forwardX * CHASE_CAMERA_BACK_DISTANCE,
+      flight.altitude + CHASE_CAMERA_HEIGHT - forwardY * CHASE_CAMERA_BACK_DISTANCE,
+      flight.z - forwardZ * CHASE_CAMERA_BACK_DISTANCE,
     )
     camera.position.lerp(
       desiredPosition.current,
       1 - Math.exp(-7 * frameSeconds),
     )
     lookAt.current.set(
-      flight.x + forwardX * 7,
-      flight.altitude + 0.05 + forwardY * 7,
-      flight.z + forwardZ * 7,
+      flight.x + forwardX * CHASE_CAMERA_LOOK_DISTANCE,
+      flight.altitude + CHASE_CAMERA_LOOK_HEIGHT + forwardY * CHASE_CAMERA_LOOK_DISTANCE,
+      flight.z + forwardZ * CHASE_CAMERA_LOOK_DISTANCE,
     )
     camera.lookAt(lookAt.current)
   })
@@ -88,7 +98,7 @@ function ProceduralShip({
     <group
       position={[flight.x, flight.altitude, flight.z]}
       rotation={[0, flight.heading, 0]}
-      scale={0.06}
+      scale={SHIP_WORLD_SCALE}
     >
       <group rotation={[flight.pitch, 0, flight.bank]}>
         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
@@ -219,15 +229,16 @@ function OrbitingPlanet({
 
 function OrientationTracker({
   system,
+  flight,
   simulationStartedAt,
   onMarkersChange,
 }: {
   system: GitHubSystem
+  flight: FlightState
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
   const { camera } = useThree()
-  const lastPublishedAt = useRef(0)
   const cameraSpacePosition = useRef(new Vector3())
   const projectedPosition = useRef(new Vector3())
   const projectionScreenMatrix = useRef(new Matrix4())
@@ -236,8 +247,6 @@ function OrientationTracker({
 
   useFrame(() => {
     const now = performance.now()
-    if (now - lastPublishedAt.current < MARKER_UPDATE_INTERVAL_MS) return
-    lastPublishedAt.current = now
     camera.updateMatrixWorld()
     projectionScreenMatrix.current.multiplyMatrices(
       camera.projectionMatrix,
@@ -245,9 +254,22 @@ function OrientationTracker({
     )
     viewFrustum.current.setFromProjectionMatrix(projectionScreenMatrix.current)
     const elapsedSeconds = (now - simulationStartedAt) / 1_000
-    const relevantPlanets = [...system.planets]
-      .sort((left, right) => right.relevanceScore - left.relevanceScore)
-      .slice(0, MAX_PLANET_MARKERS)
+    const nearbyPlanets = system.planets.flatMap((planet) => {
+      const position = planetPositionAt(planet, elapsedSeconds)
+      const distanceFromShip = Math.hypot(
+        flight.x - position.x,
+        flight.altitude - position.y,
+        flight.z - position.z,
+      )
+      if (distanceFromShip > planetMarkerDiscoveryRadius(planet.radius)) return []
+
+      return [{
+        key: `planet:${planet.repository.id}` as const,
+        label: planet.repository.name,
+        position: new Vector3(position.x, position.y, position.z),
+        radius: planet.radius,
+      }]
+    })
     const bodies = [
       {
         key: 'star' as const,
@@ -255,15 +277,7 @@ function OrientationTracker({
         position: new Vector3(),
         radius: STAR_RADIUS,
       },
-      ...relevantPlanets.map((planet) => {
-        const position = planetPositionAt(planet, elapsedSeconds)
-        return {
-          key: `planet:${planet.repository.id}` as const,
-          label: planet.repository.name,
-          position: new Vector3(position.x, position.y, position.z),
-          radius: planet.radius,
-        }
-      }),
+      ...nearbyPlanets,
     ]
 
     onMarkersChange(
@@ -357,6 +371,7 @@ function SystemScene({
       <ChaseCamera flight={flight} />
       <OrientationTracker
         system={system}
+        flight={flight}
         simulationStartedAt={simulationStartedAt}
         onMarkersChange={onMarkersChange}
       />
@@ -387,7 +402,12 @@ export function GalaxyScene({
       aria-label="Escena tridimensional con cámara automática siguiendo la nave"
     >
       <Canvas
-        camera={{ position: [0, 0.22, -10.85], fov: 64, near: 0.1, far: farPlane }}
+        camera={{
+          position: [0, CHASE_CAMERA_HEIGHT, -10 - CHASE_CAMERA_BACK_DISTANCE],
+          fov: 64,
+          near: 0.1,
+          far: farPlane,
+        }}
         dpr={[1, 1.6]}
         gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
         shadows

@@ -20,7 +20,11 @@ import {
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
 import { describeShipAppearance } from './domain/flight'
 import { type GitHubSystem, type PlanetDescriptor } from './domain/github-system'
-import { GalaxyScene, type CelestialMarkerState } from './components/GalaxyScene'
+import {
+  GalaxyScene,
+  SHIP_WORLD_SCALE,
+  type CelestialMarkerState,
+} from './components/GalaxyScene'
 import { useFlightControls } from './hooks/use-flight-controls'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
@@ -425,7 +429,7 @@ function Exploration({ system }: { system: GitHubSystem }) {
         onMarkersChange={setOrientationMarkers}
       />
 
-      <div className="celestial-markers" aria-label="Marcadores de destinos relevantes">
+      <div className="celestial-markers" aria-label="Marcadores de cuerpos celestes">
         {orientationMarkers.map((marker) => (
           <span
             key={marker.key}
@@ -501,6 +505,7 @@ function Exploration({ system }: { system: GitHubSystem }) {
           data-testid="player-ship"
           data-primary-hue={shipAppearance.primaryHue}
           data-accent-hue={shipAppearance.accentHue}
+          data-world-scale={SHIP_WORLD_SCALE}
           data-initial-destination={initialFlight.destinationRepositoryId ?? 'star'}
         >
           Nave low-poly con luz y estela tecnológicas

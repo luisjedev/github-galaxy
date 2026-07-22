@@ -79,6 +79,19 @@ describe('advanceFlight', () => {
     expect(descendingInReverse.altitude).toBeLessThan(0)
   })
 
+  test('S frena más rápido que dejar la nave a la deriva antes de aplicar reversa', () => {
+    const cruising = { ...idleState, speed: NORMAL_FLIGHT_SPEED }
+    const coasting = advanceRepeatedly(cruising, input({}), 10)
+    const braking = advanceRepeatedly(cruising, input({ reverse: true }), 10)
+
+    expect(braking.speed).toBeGreaterThanOrEqual(0)
+    expect(braking.speed).toBeLessThan(coasting.speed)
+    expect(advanceRepeatedly(braking, input({ reverse: true }))).toHaveProperty(
+      'speed',
+      -REVERSE_FLIGHT_SPEED,
+    )
+  })
+
   test('limita mucho la velocidad normal, la reversa y el turbo', () => {
     const normal = advanceRepeatedly(idleState, input({ forward: true }))
     const reverse = advanceRepeatedly(idleState, input({ reverse: true }))

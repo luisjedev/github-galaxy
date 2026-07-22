@@ -104,13 +104,15 @@ test('la guía señala la estrella fuera de pantalla y se retira cuando vuelve a
   expect(Number(await guide.getAttribute('data-screen-x'))).toBeLessThanOrEqual(10)
 })
 
-test('mantiene pocos marcadores actualizados y oculta los cuerpos detrás de la cámara', async ({
+test('muestra marcadores fluidos solo para planetas cercanos y oculta los que están detrás de la cámara', async ({
   page,
 }) => {
   const markers = page.locator('[data-marker-body]')
-  await expect.poll(async () => markers.count()).toBeGreaterThan(0)
-  expect(await markers.count()).toBeLessThanOrEqual(6)
+  const planetMarkers = page.locator('[data-marker-body^="planet:"]')
   await expect(page.locator('[data-marker-body="star"]')).toHaveCount(1)
+  await expect.poll(async () => planetMarkers.count()).toBeGreaterThan(0)
+  expect(await planetMarkers.count()).toBeLessThan(repositories.length)
+  expect(await markers.count()).toBe((await planetMarkers.count()) + 1)
 
   await expect
     .poll(async () => page.locator('[data-marker-status="visible"]').count())

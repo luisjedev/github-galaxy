@@ -43,6 +43,7 @@ export const idleFlightInput: FlightInput = {
 
 const SPAWN_DISTANCE = 10
 const FORWARD_ACCELERATION = 2
+const BRAKE_DECELERATION = 2
 const REVERSE_ACCELERATION = 0.35
 const COAST_DECELERATION = 0.2
 export const NORMAL_FLIGHT_SPEED = 2
@@ -111,7 +112,13 @@ export function advanceFlight(
   let speed = state.speed
 
   if (input.forward !== input.reverse) {
-    speed += (input.forward ? FORWARD_ACCELERATION : -REVERSE_ACCELERATION) * elapsed
+    if (input.forward) {
+      speed += FORWARD_ACCELERATION * elapsed
+    } else if (speed > 0) {
+      speed = approachZero(speed, BRAKE_DECELERATION * elapsed)
+    } else {
+      speed -= REVERSE_ACCELERATION * elapsed
+    }
   } else {
     speed = approachZero(speed, COAST_DECELERATION * elapsed)
   }
