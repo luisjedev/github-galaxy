@@ -62,7 +62,7 @@ describe('advanceFlight', () => {
     expect(level.bank).toBe(0)
   })
 
-  test('limita la velocidad normal a 3 y el turbo a 6', () => {
+  test('limita la velocidad normal a 1.5 y el turbo a 3', () => {
     const normal = advanceRepeatedly(idleState, input({ forward: true }))
     const turbo = advanceRepeatedly(idleState, input({ forward: true, turbo: true }))
 

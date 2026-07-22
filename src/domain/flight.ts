@@ -42,12 +42,12 @@ export const idleFlightInput: FlightInput = {
 }
 
 const SPAWN_DISTANCE = 10
-const FORWARD_ACCELERATION = 4
-const REVERSE_ACCELERATION = 3
-const COAST_DECELERATION = 1.5
-export const NORMAL_FLIGHT_SPEED = 3
-const REVERSE_SPEED = 1.75
-export const TURBO_FLIGHT_SPEED = 6
+const FORWARD_ACCELERATION = 2
+const REVERSE_ACCELERATION = 1.5
+const COAST_DECELERATION = 0.75
+export const NORMAL_FLIGHT_SPEED = 1.5
+const REVERSE_SPEED = 0.9
+export const TURBO_FLIGHT_SPEED = 3
 const TURN_SPEED = 1.9
 const ALTITUDE_SPEED = 7
 const ALTITUDE_LIMIT = 40

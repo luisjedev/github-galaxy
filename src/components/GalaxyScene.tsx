@@ -60,7 +60,7 @@ function ProceduralShip({
     <group
       position={[flight.x, flight.altitude, flight.z]}
       rotation={[0, flight.heading, 0]}
-      scale={0.12}
+      scale={0.06}
     >
       <group rotation={[flight.pitch, 0, flight.bank]}>
         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
