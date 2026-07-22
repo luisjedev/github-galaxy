@@ -9,7 +9,7 @@ import {
 const GITHUB_API_URL = 'https://api.github.com'
 const GITHUB_API_VERSION = '2026-03-10'
 const PAGE_SIZE = 100
-const CACHE_KEY_PREFIX = 'gitgalaxy:github-system:v1:'
+const CACHE_KEY_PREFIX = 'gitgalaxy:github-system:v3:'
 export const DEFAULT_GITHUB_CACHE_TTL_MS = 15 * 60 * 1_000
 
 interface LoadOptions {
@@ -56,7 +56,9 @@ function readCachedSystem(key: string, cacheTtlMs: number): GitHubSystem | null 
       age < 0 ||
       age >= cacheTtlMs ||
       !cached.system?.profile?.login ||
-      !Array.isArray(cached.system.repositories)
+      !Array.isArray(cached.system.repositories) ||
+      typeof cached.system.ownRepositoryCount !== 'number' ||
+      !Array.isArray(cached.system.planets)
     ) {
       window.localStorage.removeItem(`${CACHE_KEY_PREFIX}${key}`)
       return null

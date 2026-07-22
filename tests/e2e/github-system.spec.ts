@@ -123,6 +123,27 @@ test('carga y comparte desde el menú un sistema obtenido de todas las páginas 
   await expect(page.getByRole('heading', { name: 'Sistema de stargazer' })).toBeVisible()
   await expect(page.getByLabel('Estrella de stargazer')).toHaveAttribute('data-star-seed', /\d+/)
   await expect(page.getByText('101 proyectos públicos encontrados')).toBeVisible()
+  await expect(page.locator('[data-celestial-body="planet"]')).toHaveCount(20)
+  await expect(page.locator('[data-repository-id="101"]')).toBeVisible()
+  await expect(page.locator('[data-repository-id="81"]')).toHaveCount(0)
+
+  const orbitGeometry = await page.locator('.planet-orbit').evaluateAll((orbits) =>
+    orbits
+      .map((orbit) => ({
+        diameter: orbit.getBoundingClientRect().width,
+        planetDiameter: Number.parseFloat(
+          getComputedStyle(orbit.querySelector('.procedural-planet')!).width,
+        ),
+      }))
+      .sort((left, right) => left.diameter - right.diameter),
+  )
+  for (let index = 1; index < orbitGeometry.length; index += 1) {
+    const inner = orbitGeometry[index - 1]
+    const outer = orbitGeometry[index]
+    const visibleGap =
+      (outer.diameter - inner.diameter - outer.planetDiameter - inner.planetDiameter) / 2
+    expect(visibleGap).toBeGreaterThanOrEqual(0)
+  }
 
   const repositoryRequests = requests.filter((url) => url.pathname.endsWith('/repos'))
   expect(repositoryRequests).toHaveLength(2)

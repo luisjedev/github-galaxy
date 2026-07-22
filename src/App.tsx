@@ -6,7 +6,11 @@ import {
   type LoadingStage,
 } from './domain/app-state'
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
-import type { GitHubSystem } from './domain/github-system'
+import {
+  FULL_ROTATION_RADIANS,
+  type GitHubSystem,
+  type PlanetDescriptor,
+} from './domain/github-system'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
 import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
@@ -174,12 +178,50 @@ function Loading({ username, stage }: { username: string; stage: LoadingStage })
   )
 }
 
+function Planet({ planet, orbitalExtent }: { planet: PlanetDescriptor; orbitalExtent: number }) {
+  const { repository } = planet
+  const phaseProgress = planet.initialPhase / FULL_ROTATION_RADIANS
+  const rotationProgress = planet.initialRotation / FULL_ROTATION_RADIANS
+  const rotationPeriodSeconds = FULL_ROTATION_RADIANS / planet.rotationSpeed
+  const orbitSize = orbitalExtent === 0 ? 0 : (planet.orbitRadius / orbitalExtent) * 100
+  const planetStyle = {
+    '--orbit-size': `${orbitSize}%`,
+    '--orbit-period': `${planet.orbitPeriodSeconds}s`,
+    '--orbit-delay': `${-planet.orbitPeriodSeconds * phaseProgress}s`,
+    '--planet-size': `${(planet.radius / planet.orbitRadius) * 100}%`,
+    '--planet-hue': `${planet.appearanceSeed % 360}`,
+    '--rotation-period': `${rotationPeriodSeconds}s`,
+    '--rotation-delay': `${-rotationPeriodSeconds * rotationProgress}s`,
+  } as CSSProperties
+
+  return (
+    <div
+      className="planet-orbit"
+      style={planetStyle}
+      role="img"
+      aria-label={`Planeta ${repository.name}`}
+      data-celestial-body="planet"
+      data-repository-id={repository.id}
+      data-orbit-radius={planet.orbitRadius}
+      data-orbit-period={planet.orbitPeriodSeconds}
+    >
+      <span className="planet-orbit__motion" aria-hidden="true">
+        <span className="procedural-planet" />
+      </span>
+    </div>
+  )
+}
+
 function Exploration({ system }: { system: GitHubSystem }) {
-  const { profile, repositories, starSeed } = system
-  const ownRepositories = repositories.filter((repository) => !repository.fork)
+  const { profile, ownRepositoryCount, planets, starSeed } = system
+  const orbitalExtent = Math.max(
+    0,
+    ...planets.map((planet) => planet.orbitRadius + planet.radius),
+  )
   const starStyle = {
     '--star-hue': `${starSeed % 360}`,
     '--star-flare': `${36 + (starSeed % 24)}%`,
+    '--star-size': orbitalExtent === 0 ? '30%' : `${(4 / orbitalExtent) * 100}%`,
   } as CSSProperties
 
   return (
@@ -187,17 +229,23 @@ function Exploration({ system }: { system: GitHubSystem }) {
       <section className="system-summary">
         <p className="eyebrow">Sistema listo para explorar</p>
         <h1>Sistema de {profile.login}</h1>
-        <p>{ownRepositories.length} proyectos públicos encontrados</p>
-        {ownRepositories.length === 0 ? <p>Una estrella solitaria espera tu visita.</p> : null}
+        <p>{ownRepositoryCount} proyectos públicos encontrados</p>
+        {planets.length > 0 ? <p>{planets.length} planetas seleccionados</p> : null}
+        {ownRepositoryCount === 0 ? <p>Una estrella solitaria espera tu visita.</p> : null}
       </section>
-      <div
-        className="procedural-star"
-        style={starStyle}
-        role="img"
-        aria-label={`Estrella de ${profile.login}`}
-        data-star-seed={starSeed}
-      >
-        <span aria-hidden="true" />
+      <div className="system-scene" aria-label={`Sistema planetario de ${profile.login}`}>
+        {planets.map((planet) => (
+          <Planet key={planet.repository.id} planet={planet} orbitalExtent={orbitalExtent} />
+        ))}
+        <div
+          className="procedural-star"
+          style={starStyle}
+          role="img"
+          aria-label={`Estrella de ${profile.login}`}
+          data-star-seed={starSeed}
+        >
+          <span aria-hidden="true" />
+        </div>
       </div>
     </main>
   )
