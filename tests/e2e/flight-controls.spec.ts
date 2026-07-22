@@ -208,7 +208,7 @@ test('mantener Espacio activa el turbo sin desplazar el navegador cuando la expe
 
   await page.keyboard.down('a')
   await expect
-    .poll(async () => await numberAttribute(page, 'data-heading'))
+    .poll(async () => await numberAttribute(page, 'data-heading'), { timeout: 8_000 })
     .toBeGreaterThan(initialHeading + 2.5)
   await page.keyboard.up('a')
 

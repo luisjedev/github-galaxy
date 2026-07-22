@@ -5,10 +5,15 @@ import {
   type GitHubRepository,
   type GitHubSystem,
 } from '../domain/github-system'
+import {
+  selectRandomDestination,
+  type GitHubUserSearchPage,
+} from '../domain/wormhole'
 
 const GITHUB_API_URL = 'https://api.github.com'
 const GITHUB_API_VERSION = '2026-03-10'
 const PAGE_SIZE = 100
+const RANDOM_DESTINATION_ATTEMPTS = 5
 const CACHE_KEY_PREFIX = 'gitgalaxy:github-system:v4:'
 export const DEFAULT_GITHUB_CACHE_TTL_MS = 15 * 60 * 1_000
 
@@ -18,7 +23,13 @@ interface LoadOptions {
 
 export class GitHubRequestError extends Error {
   constructor(
-    public readonly kind: 'not-found' | 'rate-limit' | 'network' | 'api',
+    public readonly kind:
+      | 'not-found'
+      | 'rate-limit'
+      | 'search-rate-limit'
+      | 'network'
+      | 'invalid-response'
+      | 'api',
     message: string,
     public readonly retryAt?: number,
   ) {
@@ -80,7 +91,10 @@ function writeCachedSystem(key: string, system: GitHubSystem) {
 }
 
 function invalidResponse(): never {
-  throw new GitHubRequestError('api', 'GitHub devolvió una respuesta incompleta')
+  throw new GitHubRequestError(
+    'invalid-response',
+    'GitHub devolvió una respuesta incompleta',
+  )
 }
 
 function isNullableString(value: unknown): value is string | null {
@@ -165,7 +179,10 @@ function githubHeaders(): HeadersInit {
 
 async function readJson<T>(
   url: string,
-  options: { notFoundMeansUser?: boolean } = {},
+  options: {
+    notFoundMeansUser?: boolean
+    rateLimitKind?: 'rate-limit' | 'search-rate-limit'
+  } = {},
 ): Promise<{ data: T; response: Response }> {
   let response: Response
   try {
@@ -196,8 +213,10 @@ async function readJson<T>(
           ? Date.now() + retryAfterSeconds * 1_000
           : undefined
       throw new GitHubRequestError(
-        'rate-limit',
-        'GitHub ha limitado temporalmente las solicitudes públicas',
+        options.rateLimitKind ?? 'rate-limit',
+        options.rateLimitKind === 'search-rate-limit'
+          ? 'GitHub Search ha limitado temporalmente las solicitudes públicas'
+          : 'GitHub ha limitado temporalmente las solicitudes públicas',
         retryAt,
       )
     }
@@ -254,6 +273,44 @@ async function requestSystem(
   return createGitHubSystem(profile, repositories)
 }
 
+function normalizeSearchPage(value: unknown): GitHubUserSearchPage {
+  if (!value || typeof value !== 'object') invalidResponse()
+  const page = value as Record<string, unknown>
+  if (
+    typeof page.total_count !== 'number' ||
+    !Number.isInteger(page.total_count) ||
+    page.total_count < 0 ||
+    typeof page.incomplete_results !== 'boolean' ||
+    !Array.isArray(page.items)
+  ) {
+    invalidResponse()
+  }
+
+  const logins = page.items.map((item) => {
+    if (!item || typeof item !== 'object') invalidResponse()
+    const login = (item as Record<string, unknown>).login
+    if (typeof login !== 'string' || !login) invalidResponse()
+    return login
+  })
+  return {
+    totalCount: page.total_count,
+    incomplete: page.incomplete_results,
+    logins,
+  }
+}
+
+async function searchPublicUsers(page: number): Promise<GitHubUserSearchPage> {
+  const query = new URLSearchParams({
+    q: 'type:user repos:>=15',
+    per_page: String(PAGE_SIZE),
+    page: String(page),
+  })
+  const response = await readJson<unknown>(`${GITHUB_API_URL}/search/users?${query}`, {
+    rateLimitKind: 'search-rate-limit',
+  })
+  return normalizeSearchPage(response.data)
+}
+
 export function loadGitHubSystem(username: string, options: LoadOptions = {}): Promise<GitHubSystem> {
   const { onStage } = options
   const key = username.toLowerCase()
@@ -286,4 +343,46 @@ export function loadGitHubSystem(username: string, options: LoadOptions = {}): P
 
   pendingLoads.set(key, { promise, listeners })
   return promise
+}
+
+export function loadRandomGitHubSystem({
+  currentLogin,
+  recentLogins,
+  random = Math.random,
+  maxAttempts = RANDOM_DESTINATION_ATTEMPTS,
+}: {
+  currentLogin: string
+  recentLogins: string[]
+  random?: () => number
+  maxAttempts?: number
+}): Promise<GitHubSystem> {
+  // Cache only successful Search pages for this travel attempt. Repeated random
+  // choices avoid duplicate Search calls, while failures and future travels are fresh.
+  const pages = new Map<number, Promise<GitHubUserSearchPage>>()
+  const searchPage = (page: number) => {
+    const cached = pages.get(page)
+    if (cached) return cached
+    const request = searchPublicUsers(page)
+      .then((result) => {
+        if (result.incomplete || result.logins.length === 0) pages.delete(page)
+        return result
+      })
+      .catch((error: unknown) => {
+        pages.delete(page)
+        throw error
+      })
+    pages.set(page, request)
+    return request
+  }
+
+  return selectRandomDestination({
+    currentLogin,
+    recentLogins,
+    searchPage,
+    loadSystem: (login) => loadGitHubSystem(login),
+    random,
+    maxAttempts,
+    shouldRetryLoadError: (error) =>
+      error instanceof GitHubRequestError && error.kind === 'not-found',
+  })
 }

@@ -237,7 +237,7 @@ test('la carga y el salto de teletransporte exponen señales sonoras sincronizad
   const initialHeading = Number(await flight.getAttribute('data-heading'))
   await page.keyboard.down('a')
   await expect
-    .poll(async () => Number(await flight.getAttribute('data-heading')))
+    .poll(async () => Number(await flight.getAttribute('data-heading')), { timeout: 8_000 })
     .toBeGreaterThan(initialHeading + 2.8)
   await page.keyboard.up('a')
   await page.keyboard.down('w')

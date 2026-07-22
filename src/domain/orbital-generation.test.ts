@@ -4,6 +4,7 @@ import {
   type GitHubProfile,
   type GitHubRepository,
 } from './github-system'
+import { calculateSystemExitRadius } from './wormhole'
 import {
   generatePlanetOrbitalVisual,
   generateSystemOrbitalVisual,
@@ -190,6 +191,15 @@ describe('entorno orbital del sistema', () => {
             .toBeGreaterThan(previous.startsAt + previous.duration)
         }
       }
+    }
+
+    for (const system of systems) {
+      const normalBelt = generateSystemOrbitalVisual(system, 'normal', 4).asteroidBelt
+      const reducedBelt = generateSystemOrbitalVisual(system, 'reduced', 4).asteroidBelt
+      expect(reducedBelt.outerRadius).toBe(normalBelt.outerRadius)
+      expect(calculateSystemExitRadius(normalBelt.outerRadius)).toBeGreaterThan(
+        normalBelt.outerRadius,
+      )
     }
 
     const emptyBelt = generateSystemOrbitalVisual(systems[0], 'normal', 4).asteroidBelt

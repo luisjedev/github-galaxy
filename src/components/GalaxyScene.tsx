@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { memo, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useRef, type RefObject } from 'react'
 import {
   ACESFilmicToneMapping,
   Frustum,
@@ -17,14 +17,8 @@ import {
   planetPositionAt,
   type GitHubSystem,
 } from '../domain/github-system'
-import {
-  generateSystemOrbitalVisual,
-  type SystemOrbitalVisual,
-} from '../domain/orbital-generation'
-import {
-  selectVisualQuality,
-  type VisualQuality,
-} from '../domain/visual-generation'
+import type { SystemOrbitalVisual } from '../domain/orbital-generation'
+import type { VisualSettings } from '../platform/visual-settings'
 import { OrbitingPlanet } from './scene/ProceduralPlanet'
 import { ProceduralShip, SHIP_WORLD_SCALE } from './scene/ProceduralShip'
 import { ProceduralStar } from './scene/ProceduralStar'
@@ -47,12 +41,6 @@ export interface CelestialMarkerState {
   direction?: Point2D
 }
 
-interface VisualSettings {
-  quality: VisualQuality
-  reducedMotion: boolean
-  dpr: [number, number]
-}
-
 const PLANET_MARKER_DISCOVERY_CLEARANCE = 14
 // Scale the chase rig with the ship so its screen-space composition stays unchanged.
 const SHIP_CAMERA_COMPOSITION_SCALE = SHIP_WORLD_SCALE / 0.06
@@ -60,35 +48,6 @@ const CHASE_CAMERA_BACK_DISTANCE = 0.85 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_HEIGHT = 0.22 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_LOOK_DISTANCE = 7 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_LOOK_HEIGHT = 0.05 * SHIP_CAMERA_COMPOSITION_SCALE
-
-function usesSoftwareRenderer(): boolean {
-  try {
-    const canvas = document.createElement('canvas')
-    const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
-    if (!context) return true
-    const rendererInfo = context.getExtension('WEBGL_debug_renderer_info')
-    const renderer = rendererInfo
-      ? String(context.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL))
-      : String(context.getParameter(context.RENDERER))
-    context.getExtension('WEBGL_lose_context')?.loseContext()
-    return /swiftshader|llvmpipe|software/i.test(renderer)
-  } catch {
-    return true
-  }
-}
-
-function readVisualSettings(): VisualSettings {
-  const quality = selectVisualQuality({
-    hardwareConcurrency: navigator.hardwareConcurrency,
-    devicePixelRatio: window.devicePixelRatio,
-    softwareRenderer: usesSoftwareRenderer(),
-  })
-  return {
-    quality,
-    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    dpr: quality === 'normal' ? [1, Math.min(1.6, window.devicePixelRatio)] : [1, 1.15],
-  }
-}
 
 function planetMarkerDiscoveryRadius(planetRadius: number): number {
   return planetRadius + PLANET_MARKER_DISCOVERY_CLEARANCE
@@ -214,9 +173,9 @@ function OrientationTracker({
                   Math.max(Math.abs(cameraSpacePosition.current.x), minimumBehindHorizontal) *
                   camera.projectionMatrix.elements[0]
                 : projectedPosition.current.x,
-              y: isBehind
-                ? -cameraSpacePosition.current.y * camera.projectionMatrix.elements[5]
-                : -projectedPosition.current.y,
+              // Once the star is behind the chase camera, a horizontal cue is
+              // more stable than amplifying small camera-height differences.
+              y: isBehind ? 0 : -projectedPosition.current.y,
             },
           }
         }
@@ -328,6 +287,8 @@ export const GalaxyScene = memo(function GalaxyScene({
   simulationElapsedSeconds,
   onMarkersChange,
   paused,
+  settings,
+  orbitalVisual,
 }: {
   system: GitHubSystem
   initialFlight: FlightState
@@ -336,12 +297,9 @@ export const GalaxyScene = memo(function GalaxyScene({
   simulationElapsedSeconds: RefObject<number>
   onMarkersChange: (markers: CelestialMarkerState[]) => void
   paused: boolean
+  settings: VisualSettings
+  orbitalVisual: SystemOrbitalVisual
 }) {
-  const [settings] = useState(readVisualSettings)
-  const orbitalVisual = useMemo(
-    () => generateSystemOrbitalVisual(system, settings.quality, STAR_RADIUS),
-    [settings.quality, system],
-  )
   const farPlane = Math.max(220, orbitalVisual.asteroidBelt.outerRadius * 4)
   const moonCount = orbitalVisual.planets.reduce(
     (total, planet) => total + planet.visual.moons.length,
@@ -371,6 +329,7 @@ export const GalaxyScene = memo(function GalaxyScene({
       data-inner-rock-cluster-count={orbitalVisual.innerClusters.length}
       data-asteroid-count={orbitalVisual.asteroidBelt.rocks.length}
       data-asteroid-belt-inner-radius={orbitalVisual.asteroidBelt.innerRadius}
+      data-asteroid-belt-outer-radius={orbitalVisual.asteroidBelt.outerRadius}
       data-shooting-star-event-count={orbitalVisual.shootingStars.length}
       data-simulation-state={paused ? 'paused' : 'running'}
     >

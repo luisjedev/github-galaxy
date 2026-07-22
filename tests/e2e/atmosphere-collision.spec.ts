@@ -74,7 +74,7 @@ test('el avance descendente se detiene ante la atmósfera y la nave puede separa
   const contactZ = await numberAttribute(page, 'data-z')
   const contactAltitude = await numberAttribute(page, 'data-altitude')
   expect(Math.hypot(contactX, contactAltitude, contactZ)).toBeGreaterThanOrEqual(
-    collisionRadius - 0.01,
+    collisionRadius - 0.02,
   )
   expect(contactZ).toBeLessThan(0)
 

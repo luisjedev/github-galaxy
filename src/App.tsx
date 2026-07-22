@@ -1,7 +1,9 @@
 import {
   useEffect,
+  useMemo,
   useReducer,
   useState,
+  type CSSProperties,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
@@ -26,7 +28,6 @@ import {
   SHIP_WORLD_SCALE,
   type CelestialMarkerState,
 } from './components/GalaxyScene'
-import { useFlightControls } from './hooks/use-flight-controls'
 import {
   useProceduralAudio,
   type AudioExperienceState,
@@ -34,7 +35,14 @@ import {
 import type { ReactiveAudioState } from './platform/procedural-audio'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
+import { readVisualSettings } from './platform/visual-settings'
 import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
+import { generateSystemOrbitalVisual } from './domain/orbital-generation'
+import { calculateSystemExitRadius } from './domain/wormhole'
+import {
+  isWormholeTravelPhase,
+  useWormholeTravel,
+} from './hooks/use-wormhole-travel'
 
 const controls = [
   ['W / S', 'Avanzar · frenar / reversa'],
@@ -396,7 +404,7 @@ function placeStarGuide(
   }
 }
 
-function trapPauseFocus(event: ReactKeyboardEvent<HTMLElement>) {
+function trapDialogFocus(event: ReactKeyboardEvent<HTMLElement>) {
   if (event.key !== 'Tab') return
   const actions = Array.from(
     event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
@@ -425,21 +433,31 @@ const audioPresentation: Record<
 function Exploration({
   system,
   paused,
+  recentLogins,
   audioState,
   onAudioToggle,
   onAudioUpdate,
   onTogglePause,
   onReturnToMenu,
+  onSystemArrival,
 }: {
   system: GitHubSystem
   paused: boolean
+  recentLogins: string[]
   audioState: AudioExperienceState
   onAudioToggle: () => void
   onAudioUpdate: (state: ReactiveAudioState) => void
   onTogglePause: () => void
   onReturnToMenu: () => void
+  onSystemArrival: (destination: GitHubSystem) => void
 }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
+  const [visualSettings] = useState(readVisualSettings)
+  const orbitalVisual = useMemo(
+    () => generateSystemOrbitalVisual(system, visualSettings.quality, STAR_RADIUS),
+    [system, visualSettings.quality],
+  )
+  const systemExitRadius = calculateSystemExitRadius(orbitalVisual.asteroidBelt.outerRadius)
   const {
     experienceRef,
     flight,
@@ -450,7 +468,20 @@ function Exploration({
     atmosphereContact,
     simulationElapsedSeconds,
     teleportPhase,
-  } = useFlightControls(system, paused)
+    wormhole,
+    destinationLogin,
+    controlsBlocked,
+    audioPhase: wormholeAudioPhase,
+    startWormholeTravel,
+    stayInSystem,
+  } = useWormholeTravel({
+    system,
+    paused,
+    recentLogins,
+    reducedMotion: visualSettings.reducedMotion,
+    systemExitRadius,
+    onSystemArrival,
+  })
   const shipAppearance = describeShipAppearance(system)
   const [orientationMarkers, setOrientationMarkers] = useState<CelestialMarkerState[]>([])
   const starMarker = orientationMarkers.find((marker) => marker.key === 'star')
@@ -462,9 +493,9 @@ function Exploration({
       turbo: flight.turbo,
       proximity: Boolean(activeBody),
       paused,
-      teleportPhase: paused ? 'idle' : teleportPhase,
+      teleportPhase: wormholeAudioPhase,
     })
-  }, [activeBody, audioState, flight.speed, flight.turbo, onAudioUpdate, paused, teleportPhase])
+  }, [activeBody, audioState, flight.speed, flight.turbo, onAudioUpdate, paused, wormholeAudioPhase])
 
   const currentAudioPresentation = audioPresentation[audioState]
 
@@ -473,13 +504,18 @@ function Exploration({
       ref={experienceRef}
       className="system-layout"
       data-app-state={paused ? 'pause' : 'exploration'}
+      data-wormhole-phase={wormhole.phase}
+      data-controls-locked={controlsBlocked}
+      data-system-exit-radius={systemExitRadius}
+      data-origin-user={profile.login}
+      data-destination-user={destinationLogin ?? 'none'}
       aria-label="Experiencia de vuelo"
       tabIndex={0}
       autoFocus
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || event.repeat) return
         event.preventDefault()
-        onTogglePause()
+        if (wormhole.phase === 'idle') onTogglePause()
       }}
     >
       <section className="system-summary">
@@ -496,7 +532,9 @@ function Exploration({
         advanceFlightFrame={advanceFlightFrame}
         simulationElapsedSeconds={simulationElapsedSeconds}
         onMarkersChange={setOrientationMarkers}
-        paused={paused}
+        paused={controlsBlocked}
+        settings={visualSettings}
+        orbitalVisual={orbitalVisual}
       />
 
       <div className="celestial-markers" aria-label="Marcadores de cuerpos celestes">
@@ -585,7 +623,9 @@ function Exploration({
         </div>
       </div>
 
-      {activeBody ? <CelestialCard activeBody={activeBody} system={system} /> : null}
+      {activeBody && wormhole.phase === 'idle'
+        ? <CelestialCard activeBody={activeBody} system={system} />
+        : null}
 
       {atmosphereContact ? (
         <aside
@@ -607,7 +647,7 @@ function Exploration({
         aria-label={currentAudioPresentation.action}
         aria-pressed={audioState === 'muted'}
         disabled={audioState === 'unavailable'}
-        hidden={paused}
+        hidden={controlsBlocked}
         onClick={onAudioToggle}
       >
         <span aria-hidden="true">{currentAudioPresentation.icon}</span>
@@ -617,15 +657,17 @@ function Exploration({
       <output
         className="scene-observability"
         data-testid="audio-reactivity"
-        data-engine-state={Math.abs(flight.speed) > 0.05 && !paused && teleportPhase === 'idle' ? 'active' : 'idle'}
-        data-turbo-state={flight.turbo && !paused && teleportPhase === 'idle' ? 'active' : 'idle'}
-        data-proximity-state={activeBody && !paused && teleportPhase === 'idle' ? 'active' : 'idle'}
+        data-engine-state={Math.abs(flight.speed) > 0.05 && !controlsBlocked && teleportPhase === 'idle' ? 'active' : 'idle'}
+        data-turbo-state={flight.turbo && !controlsBlocked && teleportPhase === 'idle' ? 'active' : 'idle'}
+        data-proximity-state={activeBody && !controlsBlocked && teleportPhase === 'idle' ? 'active' : 'idle'}
         data-audio-cue={
           audioState === 'muted'
             ? 'muted'
             : audioState !== 'active'
               ? 'silent'
-              : teleportPhase === 'charging'
+              : isWormholeTravelPhase(wormhole.phase)
+                ? 'wormhole'
+                : teleportPhase === 'charging'
                 ? 'teleport-charge'
                 : teleportPhase === 'jump'
                   ? 'teleport-jump'
@@ -681,6 +723,104 @@ function Exploration({
         </aside>
       ) : null}
 
+      {wormhole.phase === 'decision' ? (
+        <aside
+          className="celestial-card system-exit-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="system-exit-title"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+            trapDialogFocus(event)
+          }}
+        >
+          <p className="eyebrow">Límite del sistema</p>
+          <h2 id="system-exit-title">Estás saliendo del sistema solar</h2>
+          <p>¿Quieres atravesar el agujero de gusano para visitar una nueva galaxia?</p>
+          <div className="system-exit-dialog__actions">
+            <button type="button" onClick={startWormholeTravel} autoFocus>
+              Atravesar el agujero de gusano
+            </button>
+            <button type="button" onClick={stayInSystem}>
+              Quedarme en este sistema
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
+      {isWormholeTravelPhase(wormhole.phase) ? (
+        <aside
+          className={`wormhole-overlay wormhole-overlay--${wormhole.phase}${visualSettings.reducedMotion ? ' wormhole-overlay--reduced-motion' : ''}`}
+          role="status"
+          aria-label="Viaje por el agujero de gusano"
+          aria-live="polite"
+          data-wormhole-phase={wormhole.phase}
+          data-origin-user={profile.login}
+          data-destination-user={destinationLogin ?? 'seleccionando'}
+        >
+          <div className="wormhole-overlay__tunnel" aria-hidden="true">
+            {Array.from({ length: 24 }, (_, index) => (
+              <span key={index} style={{ '--ray': index } as CSSProperties} />
+            ))}
+          </div>
+          <div
+            className="wormhole-overlay__ship"
+            role="img"
+            aria-label="Nave centrada atravesando el túnel espacial"
+            data-testid="wormhole-ship"
+          >
+            <span />
+          </div>
+          <div className="wormhole-overlay__status">
+            <p className="eyebrow">
+              {wormhole.phase === 'arriving' ? 'Coordenadas estabilizadas' : 'Agujero de gusano'}
+            </p>
+            <strong>
+              {wormhole.phase === 'selecting'
+                ? 'Buscando una nueva galaxia…'
+                : wormhole.phase === 'entering'
+                  ? 'Entrando en el corredor espacial…'
+                  : wormhole.phase === 'arriving'
+                    ? `Llegando al sistema de ${destinationLogin}…`
+                    : destinationLogin
+                      ? `Destino confirmado: ${destinationLogin}`
+                      : 'Atravesando el túnel mientras GitHub prepara el destino…'}
+            </strong>
+          </div>
+        </aside>
+      ) : null}
+
+      {wormhole.phase === 'failed' ? (
+        <aside
+          className="celestial-card system-exit-dialog system-exit-dialog--error"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wormhole-error-title"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              event.stopPropagation()
+            }
+            trapDialogFocus(event)
+          }}
+        >
+          <p className="eyebrow">Viaje interrumpido</p>
+          <h2 id="wormhole-error-title">{wormhole.error.title}</h2>
+          <p>{wormhole.error.message}</p>
+          <div className="system-exit-dialog__actions">
+            <button type="button" onClick={startWormholeTravel} autoFocus>
+              Reintentar el viaje
+            </button>
+            <button type="button" onClick={stayInSystem}>
+              Quedarme en este sistema
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
       <details className="flight-help" open>
         <summary>Guía de vuelo</summary>
         <dl>
@@ -699,7 +839,7 @@ function Exploration({
           role="dialog"
           aria-modal="true"
           aria-labelledby="pause-title"
-          onKeyDown={trapPauseFocus}
+          onKeyDown={trapDialogFocus}
         >
           <div className="glass-panel pause-panel">
             <p className="eyebrow">Sistema en pausa</p>
@@ -852,6 +992,7 @@ function AppView({
   onAudioUpdate: (state: ReactiveAudioState) => void
 }) {
   const [state, dispatch] = useReducer(transitionAppState, initialState)
+  const [recentLogins, setRecentLogins] = useState<string[]>([])
   const loadingUsername = state.name === 'loading' ? state.username : null
 
   useEffect(() => {
@@ -901,13 +1042,29 @@ function AppView({
     case 'pause':
       return (
         <Exploration
+          key={state.system.profile.id}
           system={state.system}
           paused={state.name === 'pause'}
+          recentLogins={recentLogins}
           audioState={audioState}
           onAudioToggle={onAudioToggle}
           onAudioUpdate={onAudioUpdate}
           onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
           onReturnToMenu={returnToMenu}
+          onSystemArrival={(destination) => {
+            if (state.name !== 'exploration') return
+            const visited = [
+              state.system.profile.login,
+              ...recentLogins,
+            ].filter((login, index, logins) =>
+              logins.findIndex((candidate) =>
+                candidate.toLowerCase() === login.toLowerCase(),
+              ) === index,
+            )
+            setRecentLogins(visited.slice(0, 8))
+            updateUserQuery(destination.profile.login, 'push')
+            dispatch({ type: 'REPLACE_SYSTEM', system: destination })
+          }}
         />
       )
     case 'error':

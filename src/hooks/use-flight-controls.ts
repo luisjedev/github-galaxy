@@ -15,6 +15,11 @@ import {
   type FlightState,
 } from '../domain/flight'
 import type { GitHubSystem } from '../domain/github-system'
+import {
+  evaluateSystemBoundary,
+  SYSTEM_EXIT_HYSTERESIS,
+  type SystemBoundaryState,
+} from '../domain/wormhole'
 
 export type TeleportPhase = 'idle' | 'charging' | 'jump'
 
@@ -42,7 +47,12 @@ function updateFlightInput(
   input[flightKey] = pressed
 }
 
-export function useFlightControls(system: GitHubSystem, paused: boolean) {
+export function useFlightControls(
+  system: GitHubSystem,
+  controlsBlocked: boolean,
+  systemExitRadius: number,
+  onSystemExit: () => void,
+) {
   const initialFlight = useState(() => createInitialFlight(system))[0]
   const initialFrameTime = useState(() => performance.now())[0]
   const [flight, setFlight] = useState(initialFlight.state)
@@ -62,17 +72,21 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
     startedAt: 0,
   })
   const [teleportPhase, setTeleportPhase] = useState<TeleportPhase>('idle')
+  const boundaryState = useRef<SystemBoundaryState>({
+    armed: true,
+    previousDistance: Math.hypot(initialFlight.state.x, initialFlight.state.z),
+  })
   const experienceRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     flightInput.current = { ...idleFlightInput }
     previousFrameTime.current = performance.now()
-    if (!paused) experienceRef.current?.focus({ preventScroll: true })
-  }, [paused])
+    if (!controlsBlocked) experienceRef.current?.focus({ preventScroll: true })
+  }, [controlsBlocked])
 
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (paused || !experienceRef.current?.contains(document.activeElement)) return
+      if (controlsBlocked || !experienceRef.current?.contains(document.activeElement)) return
       const key = event.key.toLowerCase()
       if (key === 'r') {
         event.preventDefault()
@@ -112,11 +126,35 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [paused, system])
+  }, [controlsBlocked, system])
+
+  const respawn = useCallback(() => {
+    const returnedFlight = createRespawnFlight(system)
+    teleportState.current = { phase: 'idle', startedAt: 0 }
+    setTeleportPhase('idle')
+    flightInput.current = { ...idleFlightInput }
+    flightState.current = returnedFlight
+    setFlight(returnedFlight)
+    previousFrameTime.current = performance.now()
+    const distance = Math.hypot(returnedFlight.x, returnedFlight.z)
+    boundaryState.current = {
+      armed: distance <= systemExitRadius - SYSTEM_EXIT_HYSTERESIS,
+      previousDistance: distance,
+    }
+    atmosphereContactRef.current = null
+    setAtmosphereContact(null)
+    const returnedActiveBody = selectActiveCelestialBody(
+      system,
+      returnedFlight,
+      simulationElapsedSeconds.current,
+    )
+    activeBodyRef.current = returnedActiveBody
+    setActiveBody(returnedActiveBody)
+  }, [system, systemExitRadius])
 
   const advanceFlightFrame = useCallback((time: number) => {
     const previousTime = previousFrameTime.current
-    if (paused) {
+    if (controlsBlocked) {
       previousFrameTime.current = time
       return
     }
@@ -133,22 +171,7 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
     if (teleport.phase === 'jump') {
       previousFrameTime.current = time
       if (time - teleport.startedAt < TELEPORT_JUMP_MILLISECONDS) return
-
-      const returnedFlight = createRespawnFlight(system)
-      teleportState.current = { phase: 'idle', startedAt: 0 }
-      flightInput.current = { ...idleFlightInput }
-      flightState.current = returnedFlight
-      setFlight(returnedFlight)
-      setTeleportPhase('idle')
-      atmosphereContactRef.current = null
-      setAtmosphereContact(null)
-      const returnedActiveBody = selectActiveCelestialBody(
-        system,
-        returnedFlight,
-        simulationElapsedSeconds.current,
-      )
-      activeBodyRef.current = returnedActiveBody
-      setActiveBody(returnedActiveBody)
+      respawn()
       return
     }
 
@@ -176,6 +199,27 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
       elapsedSeconds,
     )
     const nextFlight = collision.flight
+    const boundary = evaluateSystemBoundary(
+      boundaryState.current,
+      nextFlight,
+      systemExitRadius,
+    )
+    boundaryState.current = boundary
+
+    if (boundary.crossed) {
+      const stoppedFlight = {
+        ...nextFlight,
+        bank: 0,
+        pitch: 0,
+        speed: 0,
+        turbo: false,
+      }
+      flightInput.current = { ...idleFlightInput }
+      flightState.current = stoppedFlight
+      setFlight(stoppedFlight)
+      onSystemExit()
+      return
+    }
 
     if (nextFlight !== current) {
       flightState.current = nextFlight
@@ -194,7 +238,7 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
       activeBodyRef.current = nextActiveBody
       setActiveBody(nextActiveBody)
     }
-  }, [paused, system])
+  }, [controlsBlocked, onSystemExit, respawn, system, systemExitRadius])
 
   return {
     experienceRef,
@@ -206,5 +250,6 @@ export function useFlightControls(system: GitHubSystem, paused: boolean) {
     atmosphereContact,
     simulationElapsedSeconds,
     teleportPhase,
+    respawn,
   }
 }

@@ -1,4 +1,10 @@
-export type TeleportAudioPhase = 'idle' | 'charging' | 'jump'
+export type TeleportAudioPhase =
+  | 'idle'
+  | 'charging'
+  | 'jump'
+  | 'wormhole-entering'
+  | 'wormhole-tunnel'
+  | 'wormhole-arriving'
 
 export interface ReactiveAudioState {
   speed: number
@@ -220,6 +226,29 @@ export class ProceduralAudioEngine {
       oscillator.frequency.setValueAtTime(520, now)
       oscillator.frequency.exponentialRampToValueAtTime(72, now + 0.42)
       this.playProceduralJumpNoise(now)
+      return
+    }
+
+    if (phase === 'wormhole-entering') {
+      gain.gain.setValueAtTime(0.012, now)
+      gain.gain.linearRampToValueAtTime(0.065, now + 0.34)
+      oscillator.frequency.setValueAtTime(110, now)
+      oscillator.frequency.exponentialRampToValueAtTime(680, now + 0.34)
+      return
+    }
+
+    if (phase === 'wormhole-tunnel') {
+      gain.gain.setValueAtTime(0.048, now)
+      oscillator.frequency.setValueAtTime(186, now)
+      this.playProceduralJumpNoise(now)
+      return
+    }
+
+    if (phase === 'wormhole-arriving') {
+      gain.gain.setValueAtTime(0.06, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+      oscillator.frequency.setValueAtTime(420, now)
+      oscillator.frequency.exponentialRampToValueAtTime(84, now + 0.4)
       return
     }
 

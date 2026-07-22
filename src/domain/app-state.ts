@@ -20,6 +20,7 @@ export type AppEvent =
   | { type: 'SUBMIT_USER'; username: string }
   | { type: 'LOAD_PROGRESS'; stage: LoadingStage }
   | { type: 'SYSTEM_READY'; system: GitHubSystem }
+  | { type: 'REPLACE_SYSTEM'; system: GitHubSystem }
   | { type: 'TOGGLE_PAUSE' }
   | { type: 'FAIL'; error: AppError }
   | { type: 'RETURN_TO_MENU' }
@@ -33,6 +34,14 @@ export function transitionAppState(state: AppState, event: AppEvent): AppState {
     case 'SYSTEM_READY':
       return state.name === 'loading'
         ? { name: 'exploration', username: event.system.profile.login, system: event.system }
+        : state
+    case 'REPLACE_SYSTEM':
+      return state.name === 'exploration'
+        ? {
+            name: 'exploration',
+            username: event.system.profile.login,
+            system: event.system,
+          }
         : state
     case 'TOGGLE_PAUSE':
       if (state.name === 'exploration') {

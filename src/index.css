@@ -853,6 +853,173 @@ input:focus-visible {
   letter-spacing: 0.06em;
 }
 
+.system-exit-dialog {
+  z-index: 18;
+  right: clamp(2rem, 6vw, 5rem);
+  bottom: clamp(2rem, 8vw, 6rem);
+  left: auto;
+  border-color: rgb(169 149 255 / 46%);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 52%), 0 0 44px rgb(128 103 230 / 14%);
+}
+
+.system-exit-dialog > p:not(.eyebrow) {
+  margin: 1rem 0 1.35rem;
+  color: #b2bad2;
+  line-height: 1.6;
+}
+
+.system-exit-dialog--error {
+  border-color: rgb(255 180 95 / 52%);
+}
+
+.system-exit-dialog__actions {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.system-exit-dialog__actions button {
+  padding: 0.82rem 0.95rem;
+  border: 1px solid rgb(169 149 255 / 42%);
+  border-radius: 0.55rem;
+  color: #f7f7ff;
+  background: rgb(128 103 230 / 18%);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.system-exit-dialog__actions button:first-child {
+  border-color: transparent;
+  color: #101123;
+  background: linear-gradient(100deg, #a998ff, #8df5df);
+}
+
+.system-exit-dialog__actions button:hover,
+.system-exit-dialog__actions button:focus-visible {
+  filter: brightness(1.12);
+}
+
+.system-exit-dialog__actions button:focus-visible {
+  outline: 3px solid #f8cf68;
+  outline-offset: 3px;
+}
+
+.wormhole-overlay {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  overflow: hidden;
+  color: #f6fbff;
+  background:
+    radial-gradient(circle at center, rgb(239 255 253 / 92%) 0 2%, transparent 8%),
+    repeating-radial-gradient(circle at center, rgb(141 245 223 / 14%) 0 2px, transparent 4px 9vw),
+    radial-gradient(circle at center, #422e91 0, #11162f 30%, #02040e 72%);
+  isolation: isolate;
+  pointer-events: all;
+}
+
+.wormhole-overlay::before,
+.wormhole-overlay::after {
+  position: absolute;
+  inset: -25%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent, rgb(141 245 223 / 20%), transparent 18%, rgb(169 149 255 / 30%), transparent 45%);
+  content: '';
+  animation: wormhole-distortion 1.6s linear infinite;
+  filter: blur(14px);
+}
+
+.wormhole-overlay::after {
+  animation-direction: reverse;
+  animation-duration: 2.4s;
+  mix-blend-mode: screen;
+}
+
+.wormhole-overlay__tunnel {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  animation: wormhole-pulse 0.72s ease-in-out infinite alternate;
+}
+
+.wormhole-overlay__tunnel span {
+  --ray-angle: calc(var(--ray) * 15deg);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72vmax;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0 5%, rgb(223 253 247 / 95%) 28%, rgb(169 149 255 / 12%) 76%, transparent);
+  box-shadow: 0 0 10px rgb(141 245 223 / 72%);
+  opacity: 0.72;
+  transform: rotate(var(--ray-angle)) translateX(3vmax) scaleX(0.9);
+  transform-origin: left center;
+  animation: wormhole-ray 0.58s ease-in infinite;
+  animation-delay: calc(var(--ray) * -24ms);
+}
+
+.wormhole-overlay__ship {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: clamp(7rem, 13vw, 12rem);
+  height: clamp(3.8rem, 7vw, 6rem);
+  filter: drop-shadow(0 0 12px #8df5df) drop-shadow(0 18px 25px rgb(0 0 0 / 80%));
+  transform: translate(-50%, -50%);
+}
+
+.wormhole-overlay__ship::before {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0, 63% 42%, 100% 76%, 65% 70%, 54% 100%, 46% 100%, 35% 70%, 0 76%, 37% 42%);
+  background: linear-gradient(90deg, #202943, #a998ff 38%, #eef7ff 50%, #8df5df 62%, #202943);
+  content: '';
+}
+
+.wormhole-overlay__ship span {
+  position: absolute;
+  z-index: -1;
+  top: 72%;
+  left: 50%;
+  width: 1.3rem;
+  height: 32vh;
+  border-radius: 50%;
+  background: linear-gradient(#f8cf68, rgb(141 245 223 / 72%) 18%, transparent);
+  filter: blur(5px);
+  transform: translateX(-50%);
+}
+
+.wormhole-overlay__status {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 10%;
+  left: 0;
+  padding: 1rem;
+  text-align: center;
+  text-shadow: 0 2px 14px #02040e;
+}
+
+.wormhole-overlay__status strong {
+  display: block;
+  font-size: clamp(0.86rem, 2vw, 1.2rem);
+  letter-spacing: 0.05em;
+}
+
+.wormhole-overlay--arriving {
+  animation: wormhole-arrival 0.42s ease-out both;
+}
+
+.wormhole-overlay--reduced-motion {
+  background: radial-gradient(circle, rgb(239 255 253 / 88%), rgb(92 73 180 / 72%) 24%, #030510 68%);
+}
+
+.wormhole-overlay--reduced-motion::before,
+.wormhole-overlay--reduced-motion::after,
+.wormhole-overlay--reduced-motion .wormhole-overlay__tunnel {
+  display: none;
+}
+
 .flight-help {
   position: absolute;
   z-index: 6;
@@ -977,6 +1144,43 @@ input:focus-visible {
   }
   to {
     opacity: 0.18;
+  }
+}
+
+@keyframes wormhole-distortion {
+  to {
+    transform: rotate(360deg) scale(1.08);
+  }
+}
+
+@keyframes wormhole-pulse {
+  from {
+    opacity: 0.62;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes wormhole-ray {
+  from {
+    opacity: 0;
+    transform: rotate(var(--ray-angle)) translateX(1vmax) scaleX(0.08);
+  }
+  to {
+    opacity: 0.92;
+    transform: rotate(var(--ray-angle)) translateX(8vmax) scaleX(1.15);
+  }
+}
+
+@keyframes wormhole-arrival {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(2.2);
   }
 }
 
