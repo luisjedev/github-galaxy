@@ -110,6 +110,22 @@ const MIN_ORBIT_RADIUS = 8
 const SAFE_ORBIT_GAP = 2
 export const FULL_ROTATION_RADIANS = Math.PI * 2
 
+export function planetOrbitPhase(planet: PlanetDescriptor, elapsedSeconds: number): number {
+  return (
+    planet.initialPhase +
+    (elapsedSeconds / planet.orbitPeriodSeconds) * FULL_ROTATION_RADIANS
+  )
+}
+
+export function planetPositionAt(planet: PlanetDescriptor, elapsedSeconds: number) {
+  const phase = planetOrbitPhase(planet, elapsedSeconds)
+  return {
+    x: Math.cos(phase) * planet.orbitRadius,
+    y: 0,
+    z: -Math.sin(phase) * planet.orbitRadius,
+  }
+}
+
 interface LanguagePalette {
   biome: Exclude<PlanetBiome, 'rocky' | 'dead'>
   baseHue: number

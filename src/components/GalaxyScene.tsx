@@ -1,16 +1,36 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
-import { Group, Vector3 } from 'three'
+import { Frustum, Group, Matrix4, Sphere, Vector3 } from 'three'
 import {
   describeShipAppearance,
   NORMAL_FLIGHT_SPEED,
   type FlightState,
 } from '../domain/flight'
+import { STAR_RADIUS, type CelestialBodyKey } from '../domain/celestial-interaction'
 import {
-  FULL_ROTATION_RADIANS,
+  planetOrbitPhase,
+  planetPositionAt,
   type GitHubSystem,
   type PlanetDescriptor,
 } from '../domain/github-system'
+
+export type CelestialMarkerStatus = 'visible' | 'offscreen' | 'behind'
+
+interface Point2D {
+  x: number
+  y: number
+}
+
+export interface CelestialMarkerState {
+  key: CelestialBodyKey
+  label: string
+  status: CelestialMarkerStatus
+  screenPosition: Point2D
+  direction?: Point2D
+}
+
+const MAX_PLANET_MARKERS = 5
+const MARKER_UPDATE_INTERVAL_MS = 100
 
 function hsl(hue: number, saturation: number, lightness: number) {
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`
@@ -145,9 +165,7 @@ function OrbitingPlanet({
   useFrame(() => {
     if (!orbit.current || !planetMesh.current) return
     const elapsedSeconds = (performance.now() - simulationStartedAt) / 1_000
-    orbit.current.rotation.y =
-      planet.initialPhase +
-      (elapsedSeconds / planet.orbitPeriodSeconds) * FULL_ROTATION_RADIANS
+    orbit.current.rotation.y = planetOrbitPhase(planet, elapsedSeconds)
     planetMesh.current.rotation.y =
       planet.initialRotation + elapsedSeconds * planet.rotationSpeed
   })
@@ -199,14 +217,113 @@ function OrbitingPlanet({
   )
 }
 
+function OrientationTracker({
+  system,
+  simulationStartedAt,
+  onMarkersChange,
+}: {
+  system: GitHubSystem
+  simulationStartedAt: number
+  onMarkersChange: (markers: CelestialMarkerState[]) => void
+}) {
+  const { camera } = useThree()
+  const lastPublishedAt = useRef(0)
+  const cameraSpacePosition = useRef(new Vector3())
+  const projectedPosition = useRef(new Vector3())
+  const projectionScreenMatrix = useRef(new Matrix4())
+  const viewFrustum = useRef(new Frustum())
+  const bodySphere = useRef(new Sphere())
+
+  useFrame(() => {
+    const now = performance.now()
+    if (now - lastPublishedAt.current < MARKER_UPDATE_INTERVAL_MS) return
+    lastPublishedAt.current = now
+    camera.updateMatrixWorld()
+    projectionScreenMatrix.current.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    )
+    viewFrustum.current.setFromProjectionMatrix(projectionScreenMatrix.current)
+    const elapsedSeconds = (now - simulationStartedAt) / 1_000
+    const relevantPlanets = [...system.planets]
+      .sort((left, right) => right.relevanceScore - left.relevanceScore)
+      .slice(0, MAX_PLANET_MARKERS)
+    const bodies = [
+      {
+        key: 'star' as const,
+        label: `Estrella de ${system.profile.login}`,
+        position: new Vector3(),
+        radius: STAR_RADIUS,
+      },
+      ...relevantPlanets.map((planet) => {
+        const position = planetPositionAt(planet, elapsedSeconds)
+        return {
+          key: `planet:${planet.repository.id}` as const,
+          label: planet.repository.name,
+          position: new Vector3(position.x, position.y, position.z),
+          radius: planet.radius,
+        }
+      }),
+    ]
+
+    onMarkersChange(
+      bodies.map(({ key, label, position, radius }) => {
+        cameraSpacePosition.current.copy(position).applyMatrix4(camera.matrixWorldInverse)
+        projectedPosition.current.copy(position).project(camera)
+        const isBehind = cameraSpacePosition.current.z >= 0
+        const isInsideViewport = viewFrustum.current.intersectsSphere(
+          bodySphere.current.set(position, radius),
+        )
+        let starDirection: Pick<CelestialMarkerState, 'direction'> = {}
+        if (key === 'star') {
+          const minimumBehindHorizontal = Math.abs(cameraSpacePosition.current.z) * 0.08
+          const behindHorizontalSign = cameraSpacePosition.current.x < 0 ? -1 : 1
+          starDirection = {
+            direction: {
+              x: isBehind
+                ? behindHorizontalSign *
+                  Math.max(Math.abs(cameraSpacePosition.current.x), minimumBehindHorizontal) *
+                  camera.projectionMatrix.elements[0]
+                : projectedPosition.current.x,
+              y: isBehind
+                ? -cameraSpacePosition.current.y * camera.projectionMatrix.elements[5]
+                : -projectedPosition.current.y,
+            },
+          }
+        }
+        const status: CelestialMarkerStatus = isBehind
+          ? 'behind'
+          : isInsideViewport
+            ? 'visible'
+            : 'offscreen'
+
+        return {
+          key,
+          label,
+          status,
+          screenPosition: {
+            x: Math.min(92, Math.max(8, ((projectedPosition.current.x + 1) / 2) * 100)),
+            y: Math.min(94, Math.max(6, ((1 - projectedPosition.current.y) / 2) * 100)),
+          },
+          ...starDirection,
+        }
+      }),
+    )
+  })
+
+  return null
+}
+
 function SystemScene({
   system,
   flight,
   simulationStartedAt,
+  onMarkersChange,
 }: {
   system: GitHubSystem
   flight: FlightState
   simulationStartedAt: number
+  onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
   const { starAppearance, planets } = system
   const extent = Math.max(20, ...planets.map((planet) => planet.orbitRadius + planet.radius))
@@ -238,6 +355,11 @@ function SystemScene({
         accentHue={shipAppearance.accentHue}
       />
       <ChaseCamera flight={flight} />
+      <OrientationTracker
+        system={system}
+        simulationStartedAt={simulationStartedAt}
+        onMarkersChange={onMarkersChange}
+      />
     </>
   )
 }
@@ -246,10 +368,12 @@ export function GalaxyScene({
   system,
   flight,
   simulationStartedAt,
+  onMarkersChange,
 }: {
   system: GitHubSystem
   flight: FlightState
   simulationStartedAt: number
+  onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
   const farPlane = Math.max(
     160,
@@ -272,6 +396,7 @@ export function GalaxyScene({
           system={system}
           flight={flight}
           simulationStartedAt={simulationStartedAt}
+          onMarkersChange={onMarkersChange}
         />
       </Canvas>
     </div>

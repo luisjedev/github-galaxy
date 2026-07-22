@@ -1,6 +1,6 @@
 import type { FlightState } from './flight'
 import {
-  FULL_ROTATION_RADIANS,
+  planetPositionAt,
   type GitHubSystem,
   type PlanetDescriptor,
 } from './github-system'
@@ -52,18 +52,6 @@ function distanceFromShip(
   position: { x: number; y: number; z: number },
 ): number {
   return Math.hypot(flight.x - position.x, flight.altitude - position.y, flight.z - position.z)
-}
-
-function planetPosition(planet: PlanetDescriptor, elapsedSeconds: number) {
-  const phase =
-    planet.initialPhase +
-    (elapsedSeconds / planet.orbitPeriodSeconds) * FULL_ROTATION_RADIANS
-
-  return {
-    x: Math.cos(phase) * planet.orbitRadius,
-    y: 0,
-    z: -Math.sin(phase) * planet.orbitRadius,
-  }
 }
 
 interface Position {
@@ -119,7 +107,7 @@ function celestialBodies(
     ...system.planets.map((planet) => ({
       key: `planet:${planet.repository.id}` as const,
       kind: 'planet' as const,
-      position: planetPosition(planet, elapsedSeconds),
+      position: planetPositionAt(planet, elapsedSeconds),
       radius: radiusFor(planet.radius),
     })),
   ]
@@ -275,7 +263,7 @@ export function selectActiveCelestialBody(
   }
 
   for (const planet of system.planets) {
-    const planetDistance = distanceFromShip(flight, planetPosition(planet, elapsedSeconds))
+    const planetDistance = distanceFromShip(flight, planetPositionAt(planet, elapsedSeconds))
     if (planetDistance <= informationZoneRadius(planet.radius)) {
       candidates.push({
         key: `planet:${planet.repository.id}`,

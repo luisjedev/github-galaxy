@@ -20,7 +20,7 @@ import {
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
 import { describeShipAppearance } from './domain/flight'
 import { type GitHubSystem, type PlanetDescriptor } from './domain/github-system'
-import { GalaxyScene } from './components/GalaxyScene'
+import { GalaxyScene, type CelestialMarkerState } from './components/GalaxyScene'
 import { useFlightControls } from './hooks/use-flight-controls'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
@@ -327,6 +327,65 @@ function CelestialCard({
   )
 }
 
+type GuideDirection =
+  | 'right'
+  | 'down-right'
+  | 'down'
+  | 'down-left'
+  | 'left'
+  | 'up-left'
+  | 'up'
+  | 'up-right'
+
+const guideDirectionLabel: Record<GuideDirection, string> = {
+  right: 'a la derecha',
+  'down-right': 'abajo a la derecha',
+  down: 'abajo',
+  'down-left': 'abajo a la izquierda',
+  left: 'a la izquierda',
+  'up-left': 'arriba a la izquierda',
+  up: 'arriba',
+  'up-right': 'arriba a la derecha',
+}
+
+function directionName(angleDegrees: number): GuideDirection {
+  const normalized = (angleDegrees + 360) % 360
+  if (normalized < 22.5 || normalized >= 337.5) return 'right'
+  if (normalized < 67.5) return 'down-right'
+  if (normalized < 112.5) return 'down'
+  if (normalized < 157.5) return 'down-left'
+  if (normalized < 202.5) return 'left'
+  if (normalized < 247.5) return 'up-left'
+  if (normalized < 292.5) return 'up'
+  return 'up-right'
+}
+
+function placeStarGuide(
+  marker: CelestialMarkerState | undefined,
+  viewportAspectRatio: number,
+) {
+  if (!marker || marker.status === 'visible' || !marker.direction) return null
+  let directionX = marker.direction.x
+  let directionY = marker.direction.y
+  if (Math.hypot(directionX, directionY) < 0.001) {
+    directionX = 0
+    directionY = 1
+  }
+  const scale = Math.min(
+    directionX === 0 ? Number.POSITIVE_INFINITY : 44 / Math.abs(directionX),
+    directionY === 0 ? Number.POSITIVE_INFINITY : 42 / Math.abs(directionY),
+  )
+  const angleDegrees =
+    (Math.atan2(directionY, directionX * viewportAspectRatio) * 180) / Math.PI
+
+  return {
+    angleDegrees,
+    direction: directionName(angleDegrees),
+    screenX: 50 + directionX * scale,
+    screenY: 50 + directionY * scale,
+  }
+}
+
 function Exploration({ system }: { system: GitHubSystem }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
   const {
@@ -338,6 +397,9 @@ function Exploration({ system }: { system: GitHubSystem }) {
     simulationStartedAt,
   } = useFlightControls(system)
   const shipAppearance = describeShipAppearance(system)
+  const [orientationMarkers, setOrientationMarkers] = useState<CelestialMarkerState[]>([])
+  const starMarker = orientationMarkers.find((marker) => marker.key === 'star')
+  const starGuide = placeStarGuide(starMarker, window.innerWidth / window.innerHeight)
 
   return (
     <main
@@ -360,7 +422,61 @@ function Exploration({ system }: { system: GitHubSystem }) {
         system={system}
         flight={flight}
         simulationStartedAt={simulationStartedAt}
+        onMarkersChange={setOrientationMarkers}
       />
+
+      <div className="celestial-markers" aria-label="Marcadores de destinos relevantes">
+        {orientationMarkers.map((marker) => (
+          <span
+            key={marker.key}
+            className="celestial-marker"
+            hidden={marker.status !== 'visible'}
+            style={{
+              left: `${marker.screenPosition.x}%`,
+              top: `${marker.screenPosition.y}%`,
+            }}
+            data-marker-body={marker.key}
+            data-marker-status={marker.status}
+            data-screen-x={marker.screenPosition.x.toFixed(3)}
+            data-screen-y={marker.screenPosition.y.toFixed(3)}
+          >
+            <span className="celestial-marker__reticle" aria-hidden="true" />
+            {marker.label}
+          </span>
+        ))}
+      </div>
+
+      <aside
+        className="star-guide"
+        role="status"
+        aria-label={
+          starGuide
+            ? `La estrella está ${guideDirectionLabel[starGuide.direction]}`
+            : 'Dirección hacia la estrella'
+        }
+        hidden={!starGuide}
+        style={
+          starGuide
+            ? { left: `${starGuide.screenX}%`, top: `${starGuide.screenY}%` }
+            : undefined
+        }
+        data-star-guide
+        data-guide-status={starGuide ? 'visible' : 'hidden'}
+        data-guide-direction={starGuide?.direction ?? 'none'}
+        data-guide-angle={starGuide?.angleDegrees.toFixed(2) ?? 'none'}
+        data-screen-x={starGuide?.screenX.toFixed(3) ?? 'none'}
+        data-screen-y={starGuide?.screenY.toFixed(3) ?? 'none'}
+        data-star-status={starMarker?.status ?? 'unknown'}
+      >
+        <span
+          className="star-guide__arrow"
+          style={{ transform: `rotate(${starGuide?.angleDegrees ?? 0}deg)` }}
+          aria-hidden="true"
+        >
+          ➤
+        </span>
+        <span>Estrella</span>
+      </aside>
 
       <div className="scene-observability" aria-label={`Sistema planetario de ${profile.login}`}>
         {planets.map((planet) => (
