@@ -3,6 +3,7 @@ import {
   useReducer,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import {
   transitionAppState,
@@ -390,7 +391,33 @@ function placeStarGuide(
   }
 }
 
-function Exploration({ system }: { system: GitHubSystem }) {
+function trapPauseFocus(event: ReactKeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Tab') return
+  const actions = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+  )
+  if (actions.length === 0) return
+
+  const activeIndex = actions.indexOf(document.activeElement as HTMLButtonElement)
+  const shouldWrapBackward = event.shiftKey && activeIndex <= 0
+  const shouldWrapForward = !event.shiftKey && activeIndex === actions.length - 1
+  if (!shouldWrapBackward && !shouldWrapForward) return
+
+  event.preventDefault()
+  actions[shouldWrapBackward ? actions.length - 1 : 0].focus()
+}
+
+function Exploration({
+  system,
+  paused,
+  onTogglePause,
+  onReturnToMenu,
+}: {
+  system: GitHubSystem
+  paused: boolean
+  onTogglePause: () => void
+  onReturnToMenu: () => void
+}) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
   const {
     experienceRef,
@@ -400,8 +427,8 @@ function Exploration({ system }: { system: GitHubSystem }) {
     initialFlight,
     activeBody,
     atmosphereContact,
-    simulationStartedAt,
-  } = useFlightControls(system)
+    simulationElapsedSeconds,
+  } = useFlightControls(system, paused)
   const shipAppearance = describeShipAppearance(system)
   const [orientationMarkers, setOrientationMarkers] = useState<CelestialMarkerState[]>([])
   const starMarker = orientationMarkers.find((marker) => marker.key === 'star')
@@ -411,10 +438,15 @@ function Exploration({ system }: { system: GitHubSystem }) {
     <main
       ref={experienceRef}
       className="system-layout"
-      data-app-state="exploration"
+      data-app-state={paused ? 'pause' : 'exploration'}
       aria-label="Experiencia de vuelo"
       tabIndex={0}
       autoFocus
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.repeat) return
+        event.preventDefault()
+        onTogglePause()
+      }}
     >
       <section className="system-summary">
         <p className="eyebrow">Sistema listo para explorar</p>
@@ -428,8 +460,9 @@ function Exploration({ system }: { system: GitHubSystem }) {
         initialFlight={initialFlight.state}
         flightRef={flightState}
         advanceFlightFrame={advanceFlightFrame}
-        simulationStartedAt={simulationStartedAt}
+        simulationElapsedSeconds={simulationElapsedSeconds}
         onMarkersChange={setOrientationMarkers}
+        paused={paused}
       />
 
       <div className="celestial-markers" aria-label="Marcadores de cuerpos celestes">
@@ -562,17 +595,31 @@ function Exploration({ system }: { system: GitHubSystem }) {
           ))}
         </dl>
       </details>
-    </main>
-  )
-}
 
-function Pause({ username }: { username: string }) {
-  return (
-    <main className="centered-layout" data-app-state="pause">
-      <section className="glass-panel">
-        <p className="eyebrow">Sistema en pausa</p>
-        <h1>{username}</h1>
-      </section>
+      {paused ? (
+        <section
+          className="pause-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pause-title"
+          onKeyDown={trapPauseFocus}
+        >
+          <div className="glass-panel pause-panel">
+            <p className="eyebrow">Sistema en pausa</p>
+            <h1 id="pause-title">Exploración de {profile.login}</h1>
+            <p>La nave y el sistema permanecerán detenidos hasta que continúes.</p>
+            <div className="pause-actions">
+              <button type="button" onClick={onTogglePause} autoFocus>
+                Continuar explorando
+              </button>
+              <button type="button" onClick={onReturnToMenu}>
+                Volver al menú principal
+              </button>
+            </div>
+            <p className="pause-panel__hint">También puedes pulsar Esc para continuar.</p>
+          </div>
+        </section>
+      ) : null}
     </main>
   )
 }
@@ -715,6 +762,11 @@ function AppView({ initialState = initialAppState() }: { initialState?: AppState
     }
   }, [loadingUsername])
 
+  const returnToMenu = () => {
+    clearUserQuery()
+    dispatch({ type: 'RETURN_TO_MENU' })
+  }
+
   switch (state.name) {
     case 'menu':
       return (
@@ -728,18 +780,21 @@ function AppView({ initialState = initialAppState() }: { initialState?: AppState
     case 'loading':
       return <Loading username={state.username} stage={state.stage} />
     case 'exploration':
-      return <Exploration system={state.system} />
     case 'pause':
-      return <Pause username={state.username} />
+      return (
+        <Exploration
+          system={state.system}
+          paused={state.name === 'pause'}
+          onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
+          onReturnToMenu={returnToMenu}
+        />
+      )
     case 'error':
       return (
         <ErrorState
           error={state.error}
           onRetry={() => dispatch({ type: 'SUBMIT_USER', username: state.error.username })}
-          onReturnToMenu={() => {
-            clearUserQuery()
-            dispatch({ type: 'RETURN_TO_MENU' })
-          }}
+          onReturnToMenu={returnToMenu}
         />
       )
   }

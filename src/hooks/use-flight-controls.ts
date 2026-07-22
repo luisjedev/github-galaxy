@@ -36,12 +36,13 @@ function updateFlightInput(
   input[flightKey] = pressed
 }
 
-export function useFlightControls(system: GitHubSystem) {
+export function useFlightControls(system: GitHubSystem, paused: boolean) {
   const initialFlight = useState(() => createInitialFlight(system))[0]
-  const simulationStartedAt = useState(() => performance.now())[0]
+  const initialFrameTime = useState(() => performance.now())[0]
   const [flight, setFlight] = useState(initialFlight.state)
   const flightState = useRef<FlightState>(initialFlight.state)
-  const previousFrameTime = useRef(simulationStartedAt)
+  const previousFrameTime = useRef(initialFrameTime)
+  const simulationElapsedSeconds = useRef(0)
   const initialActiveBody = useState(() =>
     selectActiveCelestialBody(system, initialFlight.state, 0),
   )[0]
@@ -53,9 +54,14 @@ export function useFlightControls(system: GitHubSystem) {
   const experienceRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    experienceRef.current?.focus({ preventScroll: true })
+    flightInput.current = { ...idleFlightInput }
+    previousFrameTime.current = performance.now()
+    if (!paused) experienceRef.current?.focus({ preventScroll: true })
+  }, [paused])
+
+  useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (!experienceRef.current?.contains(document.activeElement)) return
+      if (paused || !experienceRef.current?.contains(document.activeElement)) return
       if (event.key.toLowerCase() === 'e' && !event.repeat) {
         const destination =
           activeBodyRef.current?.kind === 'planet'
@@ -85,17 +91,22 @@ export function useFlightControls(system: GitHubSystem) {
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [system])
+  }, [paused, system])
 
   const advanceFlightFrame = useCallback((time: number) => {
     const previousTime = previousFrameTime.current
+    if (paused) {
+      previousFrameTime.current = time
+      return
+    }
     const frameSeconds = (time - previousTime) / 1_000
-    const previousElapsedSeconds = (previousTime - simulationStartedAt) / 1_000
+    const previousElapsedSeconds = simulationElapsedSeconds.current
+    const elapsedSeconds = previousElapsedSeconds + frameSeconds
     previousFrameTime.current = time
+    simulationElapsedSeconds.current = elapsedSeconds
     const current = flightState.current
     const input = flightInput.current
     const hasInput = Object.values(input).some(Boolean)
-    const elapsedSeconds = (time - simulationStartedAt) / 1_000
     const proposedFlight =
       !hasInput &&
       current.speed === 0 &&
@@ -130,7 +141,7 @@ export function useFlightControls(system: GitHubSystem) {
       activeBodyRef.current = nextActiveBody
       setActiveBody(nextActiveBody)
     }
-  }, [simulationStartedAt, system])
+  }, [paused, system])
 
   return {
     experienceRef,
@@ -140,6 +151,6 @@ export function useFlightControls(system: GitHubSystem) {
     initialFlight,
     activeBody,
     atmosphereContact,
-    simulationStartedAt,
+    simulationElapsedSeconds,
   }
 }

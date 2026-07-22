@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
 import {
   AdditiveBlending,
   BackSide,
@@ -160,12 +160,12 @@ function PlanetAtmosphere({ planet, visual }: { planet: PlanetDescriptor; visual
 
 export function OrbitingPlanet({
   planet,
-  simulationStartedAt,
+  simulationElapsedSeconds,
   quality,
   orbitalVisual,
 }: {
   planet: PlanetDescriptor
-  simulationStartedAt: number
+  simulationElapsedSeconds: RefObject<number>
   quality: VisualQuality
   orbitalVisual: PlanetOrbitalVisual
 }) {
@@ -177,7 +177,7 @@ export function OrbitingPlanet({
   useEffect(() => () => geometry.dispose(), [geometry])
   useFrame(() => {
     if (!orbit.current || !planetSurface.current) return
-    const elapsedSeconds = (performance.now() - simulationStartedAt) / 1_000
+    const elapsedSeconds = simulationElapsedSeconds.current
     orbit.current.rotation.y = planetOrbitPhase(planet, elapsedSeconds)
     planetSurface.current.rotation.y = planet.initialRotation + elapsedSeconds * planet.rotationSpeed
   })

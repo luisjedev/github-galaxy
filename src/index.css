@@ -812,6 +812,60 @@ input:focus-visible {
   color: #949bb5;
 }
 
+.pause-overlay {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  inset: 0;
+  padding: 2rem;
+  place-items: center;
+  background: rgb(3 5 16 / 76%);
+  backdrop-filter: blur(12px);
+}
+
+.pause-panel {
+  padding: clamp(2rem, 5vw, 4rem);
+}
+
+.pause-panel > p:not(.eyebrow) {
+  max-width: 32rem;
+  margin: 1.25rem auto 0;
+  color: #a2aac4;
+  line-height: 1.65;
+}
+
+.pause-actions {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 2rem;
+}
+
+.pause-actions button {
+  padding: 0.9rem 1.2rem;
+  border: 1px solid rgb(169 149 255 / 38%);
+  border-radius: 0.6rem;
+  color: #f7f7ff;
+  background: rgb(128 103 230 / 18%);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.pause-actions button:first-child {
+  border-color: transparent;
+  color: #101123;
+  background: linear-gradient(100deg, #a998ff, #8df5df);
+}
+
+.pause-actions button:hover {
+  filter: brightness(1.1);
+}
+
+.pause-panel .pause-panel__hint {
+  color: #737c99;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

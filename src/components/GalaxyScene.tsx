@@ -145,12 +145,12 @@ function ChaseCamera({ flightRef }: { flightRef: FlightStateRef }) {
 function OrientationTracker({
   system,
   flightRef,
-  simulationStartedAt,
+  simulationElapsedSeconds,
   onMarkersChange,
 }: {
   system: GitHubSystem
   flightRef: FlightStateRef
-  simulationStartedAt: number
+  simulationElapsedSeconds: RefObject<number>
   onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
   const { camera } = useThree()
@@ -162,14 +162,13 @@ function OrientationTracker({
 
   useFrame(() => {
     const flight = flightRef.current
-    const now = performance.now()
     camera.updateMatrixWorld()
     projectionScreenMatrix.current.multiplyMatrices(
       camera.projectionMatrix,
       camera.matrixWorldInverse,
     )
     viewFrustum.current.setFromProjectionMatrix(projectionScreenMatrix.current)
-    const elapsedSeconds = (now - simulationStartedAt) / 1_000
+    const elapsedSeconds = simulationElapsedSeconds.current
     const nearbyPlanets = system.planets.flatMap((planet) => {
       const position = planetPositionAt(planet, elapsedSeconds)
       const distanceFromShip = Math.hypot(
@@ -248,7 +247,7 @@ function SystemScene({
   system,
   flightRef,
   advanceFlightFrame,
-  simulationStartedAt,
+  simulationElapsedSeconds,
   onMarkersChange,
   settings,
   orbitalVisual,
@@ -256,7 +255,7 @@ function SystemScene({
   system: GitHubSystem
   flightRef: FlightStateRef
   advanceFlightFrame: (time: number) => void
-  simulationStartedAt: number
+  simulationElapsedSeconds: RefObject<number>
   onMarkersChange: (markers: CelestialMarkerState[]) => void
   settings: VisualSettings
   orbitalVisual: SystemOrbitalVisual
@@ -294,7 +293,7 @@ function SystemScene({
         <OrbitingPlanet
           key={planet.repository.id}
           planet={planet}
-          simulationStartedAt={simulationStartedAt}
+          simulationElapsedSeconds={simulationElapsedSeconds}
           quality={settings.quality}
           orbitalVisual={orbitalVisual.planets.find(
             (entry) => entry.repositoryId === planet.repository.id,
@@ -314,7 +313,7 @@ function SystemScene({
       <OrientationTracker
         system={system}
         flightRef={flightRef}
-        simulationStartedAt={simulationStartedAt}
+        simulationElapsedSeconds={simulationElapsedSeconds}
         onMarkersChange={onMarkersChange}
       />
     </>
@@ -326,15 +325,17 @@ export const GalaxyScene = memo(function GalaxyScene({
   initialFlight,
   flightRef,
   advanceFlightFrame,
-  simulationStartedAt,
+  simulationElapsedSeconds,
   onMarkersChange,
+  paused,
 }: {
   system: GitHubSystem
   initialFlight: FlightState
   flightRef: FlightStateRef
   advanceFlightFrame: (time: number) => void
-  simulationStartedAt: number
+  simulationElapsedSeconds: RefObject<number>
   onMarkersChange: (markers: CelestialMarkerState[]) => void
+  paused: boolean
 }) {
   const [settings] = useState(readVisualSettings)
   const orbitalVisual = useMemo(
@@ -370,8 +371,10 @@ export const GalaxyScene = memo(function GalaxyScene({
       data-asteroid-count={orbitalVisual.asteroidBelt.rocks.length}
       data-asteroid-belt-inner-radius={orbitalVisual.asteroidBelt.innerRadius}
       data-shooting-star-event-count={orbitalVisual.shootingStars.length}
+      data-simulation-state={paused ? 'paused' : 'running'}
     >
       <Canvas
+        frameloop={paused ? 'never' : 'always'}
         camera={{
           position: [
             initialFlight.x - Math.sin(initialFlight.heading) * CHASE_CAMERA_BACK_DISTANCE,
@@ -399,7 +402,7 @@ export const GalaxyScene = memo(function GalaxyScene({
           system={system}
           flightRef={flightRef}
           advanceFlightFrame={advanceFlightFrame}
-          simulationStartedAt={simulationStartedAt}
+          simulationElapsedSeconds={simulationElapsedSeconds}
           onMarkersChange={onMarkersChange}
           settings={settings}
           orbitalVisual={orbitalVisual}
