@@ -9,7 +9,7 @@ import {
 const GITHUB_API_URL = 'https://api.github.com'
 const GITHUB_API_VERSION = '2026-03-10'
 const PAGE_SIZE = 100
-const CACHE_KEY_PREFIX = 'gitgalaxy:github-system:v3:'
+const CACHE_KEY_PREFIX = 'gitgalaxy:github-system:v4:'
 export const DEFAULT_GITHUB_CACHE_TTL_MS = 15 * 60 * 1_000
 
 interface LoadOptions {

@@ -179,7 +179,7 @@ function Loading({ username, stage }: { username: string; stage: LoadingStage })
 }
 
 function Planet({ planet, orbitalExtent }: { planet: PlanetDescriptor; orbitalExtent: number }) {
-  const { repository } = planet
+  const { appearance, repository } = planet
   const phaseProgress = planet.initialPhase / FULL_ROTATION_RADIANS
   const rotationProgress = planet.initialRotation / FULL_ROTATION_RADIANS
   const rotationPeriodSeconds = FULL_ROTATION_RADIANS / planet.rotationSpeed
@@ -189,38 +189,70 @@ function Planet({ planet, orbitalExtent }: { planet: PlanetDescriptor; orbitalEx
     '--orbit-period': `${planet.orbitPeriodSeconds}s`,
     '--orbit-delay': `${-planet.orbitPeriodSeconds * phaseProgress}s`,
     '--planet-size': `${(planet.radius / planet.orbitRadius) * 100}%`,
-    '--planet-hue': `${planet.appearanceSeed % 360}`,
+    '--planet-base-hue': `${appearance.baseHue}`,
+    '--planet-accent-hue': `${appearance.accentHue}`,
+    '--planet-saturation': `${appearance.saturation}%`,
+    '--planet-lightness': `${appearance.lightness}%`,
+    '--planet-luminosity': `${appearance.luminosity}`,
+    '--planet-surface-angle': `${appearance.surfaceSeed % 360}deg`,
+    '--planet-ring-hue': `${appearance.ringHue}`,
     '--rotation-period': `${rotationPeriodSeconds}s`,
     '--rotation-delay': `${-rotationPeriodSeconds * rotationProgress}s`,
   } as CSSProperties
+  const appearanceDescription = [
+    appearance.state === 'archived'
+      ? 'archivado'
+      : appearance.state === 'neutral'
+        ? 'sin lenguaje'
+        : appearance.biome,
+    repository.size === 0 ? 'vacío' : null,
+    appearance.hasRing ? 'plantilla con anillo' : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div
       className="planet-orbit"
       style={planetStyle}
       role="img"
-      aria-label={`Planeta ${repository.name}`}
+      aria-label={`Planeta ${repository.name}, ${appearanceDescription}`}
       data-celestial-body="planet"
       data-repository-id={repository.id}
       data-orbit-radius={planet.orbitRadius}
       data-orbit-period={planet.orbitPeriodSeconds}
     >
       <span className="planet-orbit__motion" aria-hidden="true">
-        <span className="procedural-planet" />
+        <span
+          className={`procedural-planet procedural-planet--${appearance.surfaceFeature}`}
+          data-appearance-state={appearance.state}
+          data-biome={appearance.biome}
+          data-language-family={appearance.languageFamily ?? 'none'}
+          data-size-state={repository.size === 0 ? 'empty' : 'populated'}
+          data-surface-feature={appearance.surfaceFeature}
+          data-template={appearance.hasRing}
+        >
+          {appearance.hasRing ? <span className="planet-ring" /> : null}
+        </span>
       </span>
     </div>
   )
 }
 
 function Exploration({ system }: { system: GitHubSystem }) {
-  const { profile, ownRepositoryCount, planets, starSeed } = system
+  const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
   const orbitalExtent = Math.max(
     0,
     ...planets.map((planet) => planet.orbitRadius + planet.radius),
   )
   const starStyle = {
-    '--star-hue': `${starSeed % 360}`,
+    '--star-hue': `${starAppearance.primaryHue}`,
+    '--star-corona-hue': `${starAppearance.coronaHue}`,
+    '--star-accent-hue': `${starAppearance.accentHue}`,
     '--star-flare': `${36 + (starSeed % 24)}%`,
+    '--star-flare-radius': `${16 * starAppearance.flareScale}rem`,
+    '--star-luminosity': `${starAppearance.luminosity}`,
+    '--star-facet-angle': `${starAppearance.facetSeed % 360}deg`,
     '--star-size': orbitalExtent === 0 ? '30%' : `${(4 / orbitalExtent) * 100}%`,
   } as CSSProperties
 
@@ -243,6 +275,8 @@ function Exploration({ system }: { system: GitHubSystem }) {
           role="img"
           aria-label={`Estrella de ${profile.login}`}
           data-star-seed={starSeed}
+          data-primary-hue={starAppearance.primaryHue}
+          data-language-families={starAppearance.languageFamilies.join(',')}
         >
           <span aria-hidden="true" />
         </div>

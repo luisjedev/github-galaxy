@@ -130,6 +130,66 @@ describe('createGitHubSystem', () => {
     }
   })
 
+  test('describe biomas y estados reconocibles sin depender exclusivamente del color', () => {
+    const system = createGitHubSystem(profile, [
+      repository(1, { language: 'TypeScript', size: 100 }),
+      repository(2, { language: 'typescript', size: 200 }),
+      repository(3, { language: null }),
+      repository(4, { language: 'Python', archived: true }),
+      repository(5, { language: 'Rust', is_template: true }),
+    ])
+    const appearances = new Map(
+      system.planets.map(({ repository: repo, appearance }) => [repo.id, appearance]),
+    )
+
+    expect(appearances.get(1)).toMatchObject({
+      languageFamily: 'typescript',
+      biome: 'crystalline',
+      baseHue: 215,
+      state: 'active',
+      surfaceFeature: 'facets',
+    })
+    expect(appearances.get(2)?.baseHue).toBe(appearances.get(1)?.baseHue)
+    expect(appearances.get(2)?.surfaceSeed).not.toBe(appearances.get(1)?.surfaceSeed)
+    expect(appearances.get(3)).toMatchObject({
+      languageFamily: null,
+      biome: 'rocky',
+      state: 'neutral',
+      surfaceFeature: 'craters',
+    })
+    expect(appearances.get(4)).toMatchObject({
+      biome: 'dead',
+      state: 'archived',
+      saturation: 8,
+      surfaceFeature: 'craters',
+    })
+    expect(appearances.get(5)).toMatchObject({
+      languageFamily: 'rust',
+      hasRing: true,
+    })
+  })
+
+  test('deriva una identidad estelar reproducible del perfil y su paleta tecnológica', () => {
+    const repositories = [
+      repository(1, { language: 'Rust' }),
+      repository(2, { language: 'TypeScript' }),
+      repository(3, { language: 'typescript' }),
+      repository(4, { language: null }),
+    ]
+    const star = createGitHubSystem(profile, repositories).starAppearance
+    const reordered = createGitHubSystem(profile, [...repositories].reverse()).starAppearance
+    const differentTechnology = createGitHubSystem(profile, [
+      repository(1, { language: 'Python' }),
+    ]).starAppearance
+
+    expect(star).toEqual(reordered)
+    expect(star).toMatchObject({
+      languageFamilies: ['typescript', 'rust'],
+      technologyHues: [215, 16],
+    })
+    expect(star.primaryHue).not.toBe(differentTechnology.primaryHue)
+  })
+
   test('produce fases, rotaciones y órbitas lentas reproducibles sin depender del orden de entrada', () => {
     const repositories = [
       repository(8, { size: 42, updated_at: '2025-01-01T00:00:00Z' }),

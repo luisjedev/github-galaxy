@@ -104,6 +104,41 @@ test('reutiliza la caché durante quince minutos y refresca los datos al expirar
   expect(requests).toHaveLength(4)
 })
 
+test('representa una escena sembrada con biomas y estados procedurales distinguibles', async ({
+  page,
+}) => {
+  await interceptGitHub(page, [
+    { ...repository(1), language: 'TypeScript' },
+    { ...repository(2), language: null },
+    { ...repository(3), language: 'Python', archived: true },
+    { ...repository(4), language: 'JavaScript', size: 0 },
+    { ...repository(5), language: 'TypeScript', is_template: true },
+  ])
+
+  await page.goto('/?user=stargazer')
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+
+  const normal = page.locator('[data-repository-id="1"] .procedural-planet')
+  const neutral = page.locator('[data-repository-id="2"] .procedural-planet')
+  const archived = page.locator('[data-repository-id="3"] .procedural-planet')
+  const empty = page.locator('[data-repository-id="4"] .procedural-planet')
+  const template = page.locator('[data-repository-id="5"] .procedural-planet')
+
+  await expect(normal).toHaveAttribute('data-biome', 'crystalline')
+  await expect(normal).toHaveAttribute('data-surface-feature', 'facets')
+  await expect(neutral).toHaveAttribute('data-appearance-state', 'neutral')
+  await expect(neutral).toHaveAttribute('data-biome', 'rocky')
+  await expect(archived).toHaveAttribute('data-appearance-state', 'archived')
+  await expect(archived).toHaveAttribute('data-biome', 'dead')
+  await expect(empty).toHaveAttribute('data-size-state', 'empty')
+  await expect(template).toHaveAttribute('data-template', 'true')
+  await expect(template.locator('.planet-ring')).toBeVisible()
+
+  const star = page.getByLabel('Estrella de stargazer')
+  await expect(star).toHaveAttribute('data-primary-hue', '215')
+  await expect(star).toHaveAttribute('data-language-families', 'typescript,javascript,python')
+})
+
 test('carga y comparte desde el menú un sistema obtenido de todas las páginas de GitHub', async ({
   page,
 }) => {
