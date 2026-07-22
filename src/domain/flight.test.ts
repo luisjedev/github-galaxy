@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest'
-import { advanceFlight, idleFlightInput, type FlightInput, type FlightState } from './flight'
+import {
+  advanceFlight,
+  idleFlightInput,
+  NORMAL_FLIGHT_SPEED,
+  TURBO_FLIGHT_SPEED,
+  type FlightInput,
+  type FlightState,
+} from './flight'
 
 const idleState: FlightState = {
   x: 0,
@@ -55,11 +62,11 @@ describe('advanceFlight', () => {
     expect(level.bank).toBe(0)
   })
 
-  test('limita la velocidad normal a 8 y el turbo a 15', () => {
+  test('limita la velocidad normal a 3 y el turbo a 6', () => {
     const normal = advanceRepeatedly(idleState, input({ forward: true }))
     const turbo = advanceRepeatedly(idleState, input({ forward: true, turbo: true }))
 
-    expect(normal.speed).toBe(8)
-    expect(turbo.speed).toBe(15)
+    expect(normal.speed).toBe(NORMAL_FLIGHT_SPEED)
+    expect(turbo.speed).toBe(TURBO_FLIGHT_SPEED)
   })
 })

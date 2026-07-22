@@ -1,7 +1,11 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { Group, Vector3 } from 'three'
-import { describeShipAppearance, type FlightState } from '../domain/flight'
+import {
+  describeShipAppearance,
+  NORMAL_FLIGHT_SPEED,
+  type FlightState,
+} from '../domain/flight'
 import {
   FULL_ROTATION_RADIANS,
   type GitHubSystem,
@@ -21,18 +25,18 @@ function ChaseCamera({ flight }: { flight: FlightState }) {
     const forwardX = Math.sin(flight.heading)
     const forwardZ = Math.cos(flight.heading)
     desiredPosition.current.set(
-      flight.x - forwardX * 15,
-      flight.altitude + 8,
-      flight.z - forwardZ * 15,
+      flight.x - forwardX * 2.2,
+      flight.altitude + 0.85,
+      flight.z - forwardZ * 2.2,
     )
     camera.position.lerp(
       desiredPosition.current,
       1 - Math.exp(-7 * Math.min(elapsedSeconds, 0.05)),
     )
     lookAt.current.set(
-      flight.x + forwardX * 4,
-      flight.altitude + 0.7,
-      flight.z + forwardZ * 4,
+      flight.x + forwardX * 7,
+      flight.altitude + 0.15,
+      flight.z + forwardZ * 7,
     )
     camera.lookAt(lookAt.current)
   })
@@ -49,14 +53,14 @@ function ProceduralShip({
   primaryHue: number
   accentHue: number
 }) {
-  const engineIntensity = Math.min(1, Math.abs(flight.speed) / 8)
+  const engineIntensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
   const trailLength = flight.turbo ? 7 : 2.5 + engineIntensity * 2.5
 
   return (
     <group
       position={[flight.x, flight.altitude, flight.z]}
       rotation={[0, flight.heading, 0]}
-      scale={0.58}
+      scale={0.12}
     >
       <group rotation={[flight.pitch, 0, flight.bank]}>
         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
@@ -251,7 +255,7 @@ export function GalaxyScene({
       aria-label="Escena tridimensional con cámara automática siguiendo la nave"
     >
       <Canvas
-        camera={{ position: [0, 8, -25], fov: 58, near: 0.1, far: farPlane }}
+        camera={{ position: [0, 0.85, -12.2], fov: 64, near: 0.1, far: farPlane }}
         dpr={[1, 1.6]}
         gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
         shadows

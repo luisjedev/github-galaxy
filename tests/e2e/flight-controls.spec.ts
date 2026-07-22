@@ -154,7 +154,7 @@ test('mantener Espacio activa el turbo sin desplazar el navegador cuando la expe
   await page.keyboard.down('w')
   await page.keyboard.down(' ')
   await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'true')
-  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBeGreaterThan(8)
+  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBeGreaterThan(3)
   expect(await page.evaluate(() => window.scrollY)).toBe(initialScroll)
 
   await page.keyboard.up(' ')
