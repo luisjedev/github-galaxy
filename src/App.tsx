@@ -417,7 +417,6 @@ function Exploration({ system }: { system: GitHubSystem }) {
       <section className="system-summary">
         <p className="eyebrow">Sistema listo para explorar</p>
         <h1>Sistema de {profile.login}</h1>
-        <p>{ownRepositoryCount} proyectos públicos encontrados</p>
         {planets.length > 0 ? <p>{planets.length} planetas seleccionados</p> : null}
         {ownRepositoryCount === 0 ? <p>Una estrella solitaria espera tu visita.</p> : null}
       </section>
