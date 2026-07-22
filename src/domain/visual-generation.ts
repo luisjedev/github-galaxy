@@ -74,13 +74,6 @@ export interface AtmosphereVisual {
   scale: number
 }
 
-export interface RingBandVisual {
-  radius: number
-  width: number
-  opacity: number
-  hue: number
-}
-
 export interface PlanetVisual {
   radius: number
   surfaceSamples: PlanetSurfaceSample[]
@@ -88,7 +81,6 @@ export interface PlanetVisual {
   atmosphere: AtmosphereVisual | null
   cloudLayer: boolean
   emissiveStrength: number
-  ringBands: RingBandVisual[]
 }
 
 const UINT32_MAX = 0x1_0000_0000
@@ -376,14 +368,6 @@ export function generatePlanetVisual(
         scale: round(1.045 + appearance.luminosity * 0.012),
       }
     : null
-  const ringBands = appearance.hasRing
-    ? [
-        { radius: 1.34, width: 0.08, opacity: 0.32, hue: appearance.ringHue },
-        { radius: 1.55, width: 0.13, opacity: 0.62, hue: wrappedHue(appearance.ringHue + 12) },
-        { radius: 1.78, width: 0.07, opacity: 0.24, hue: wrappedHue(appearance.ringHue - 18) },
-      ]
-    : []
-
   return {
     radius,
     surfaceSamples: Array.from({ length: 80 }, (_, index) =>
@@ -400,6 +384,5 @@ export function generatePlanetVisual(
         : appearance.state === 'neutral'
           ? 0.06
           : round(appearance.luminosity * (appearance.biome === 'volcanic' ? 0.38 : 0.15)),
-    ringBands,
   }
 }

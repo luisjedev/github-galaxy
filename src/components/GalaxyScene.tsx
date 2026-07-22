@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   ACESFilmicToneMapping,
   Frustum,
@@ -18,12 +18,17 @@ import {
   type GitHubSystem,
 } from '../domain/github-system'
 import {
+  generateSystemOrbitalVisual,
+  type SystemOrbitalVisual,
+} from '../domain/orbital-generation'
+import {
   selectVisualQuality,
   type VisualQuality,
 } from '../domain/visual-generation'
 import { OrbitingPlanet } from './scene/ProceduralPlanet'
 import { ProceduralShip, SHIP_WORLD_SCALE } from './scene/ProceduralShip'
 import { ProceduralStar } from './scene/ProceduralStar'
+import { OrbitalRockEnvironment } from './scene/OrbitalDetails'
 import { SpaceBackground } from './scene/SpaceBackground'
 import { hsl } from './scene/visual-utils'
 
@@ -232,15 +237,17 @@ function SystemScene({
   simulationStartedAt,
   onMarkersChange,
   settings,
+  orbitalVisual,
 }: {
   system: GitHubSystem
   flight: FlightState
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
   settings: VisualSettings
+  orbitalVisual: SystemOrbitalVisual
 }) {
   const { starAppearance, planets } = system
-  const extent = Math.max(20, ...planets.map((planet) => planet.orbitRadius + planet.radius))
+  const extent = Math.max(20, orbitalVisual.asteroidBelt.outerRadius)
   const shipAppearance = describeShipAppearance(system)
 
   return (
@@ -259,6 +266,8 @@ function SystemScene({
         quality={settings.quality}
         reducedMotion={settings.reducedMotion}
         flight={flight}
+        shootingStars={orbitalVisual.shootingStars}
+        shootingStarCycleSeconds={orbitalVisual.shootingStarCycleSeconds}
       />
       <ProceduralStar
         appearance={starAppearance}
@@ -271,8 +280,15 @@ function SystemScene({
           planet={planet}
           simulationStartedAt={simulationStartedAt}
           quality={settings.quality}
+          orbitalVisual={orbitalVisual.planets.find(
+            (entry) => entry.repositoryId === planet.repository.id,
+          )!.visual}
         />
       ))}
+      <OrbitalRockEnvironment
+        clusters={orbitalVisual.innerClusters}
+        belt={orbitalVisual.asteroidBelt}
+      />
       <ProceduralShip
         flight={flight}
         primaryHue={shipAppearance.primaryHue}
@@ -301,9 +317,19 @@ export function GalaxyScene({
   onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
   const [settings] = useState(readVisualSettings)
-  const farPlane = Math.max(
-    220,
-    ...system.planets.map((planet) => (planet.orbitRadius + planet.radius) * 4),
+  const orbitalVisual = useMemo(
+    () => generateSystemOrbitalVisual(system, settings.quality, STAR_RADIUS),
+    [settings.quality, system],
+  )
+  const farPlane = Math.max(220, orbitalVisual.asteroidBelt.outerRadius * 4)
+  const moonCount = orbitalVisual.planets.reduce(
+    (total, planet) => total + planet.visual.moons.length,
+    0,
+  )
+  const ringCount = orbitalVisual.planets.filter((planet) => planet.visual.ring).length
+  const artificialObjectCount = orbitalVisual.planets.reduce(
+    (total, planet) => total + planet.visual.artificialObjects.length,
+    0,
   )
 
   return (
@@ -317,6 +343,13 @@ export function GalaxyScene({
       data-star-count={settings.quality === 'normal' ? 960 : 240}
       data-dust-count={settings.quality === 'normal' ? 120 : 32}
       data-nebula-count={settings.quality === 'normal' ? 2 + (system.starSeed % 3) : 2}
+      data-moon-count={moonCount}
+      data-ring-count={ringCount}
+      data-artificial-object-count={artificialObjectCount}
+      data-inner-rock-cluster-count={orbitalVisual.innerClusters.length}
+      data-asteroid-count={orbitalVisual.asteroidBelt.rocks.length}
+      data-asteroid-belt-inner-radius={orbitalVisual.asteroidBelt.innerRadius}
+      data-shooting-star-event-count={orbitalVisual.shootingStars.length}
     >
       <Canvas
         camera={{
@@ -348,6 +381,7 @@ export function GalaxyScene({
           simulationStartedAt={simulationStartedAt}
           onMarkersChange={onMarkersChange}
           settings={settings}
+          orbitalVisual={orbitalVisual}
         />
       </Canvas>
     </div>

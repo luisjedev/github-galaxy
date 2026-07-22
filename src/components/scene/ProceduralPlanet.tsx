@@ -17,12 +17,14 @@ import {
   planetOrbitPhase,
   type PlanetDescriptor,
 } from '../../domain/github-system'
+import type { PlanetOrbitalVisual } from '../../domain/orbital-generation'
 import {
   generatePlanetVisual,
   samplePlanetSurface,
   type PlanetVisual,
   type VisualQuality,
 } from '../../domain/visual-generation'
+import { PlanetaryCompanions } from './OrbitalDetails'
 import {
   colorFromHsl,
   fresnelFragmentShader,
@@ -156,57 +158,28 @@ function PlanetAtmosphere({ planet, visual }: { planet: PlanetDescriptor; visual
   )
 }
 
-function PlanetRings({ planet, visual }: { planet: PlanetDescriptor; visual: PlanetVisual }) {
-  if (visual.ringBands.length === 0) return null
-
-  return (
-    <group rotation={[Math.PI / 2.7, 0.25, 0]}>
-      {visual.ringBands.map((band) => (
-        <mesh key={band.radius}>
-          <torusGeometry
-            args={[
-              planet.radius * band.radius,
-              planet.radius * band.width,
-              4,
-              64,
-            ]}
-          />
-          <meshStandardMaterial
-            color={hsl(band.hue, 82, 66)}
-            emissive={hsl(band.hue, 72, 34)}
-            emissiveIntensity={0.26}
-            transparent
-            opacity={band.opacity}
-            depthWrite={false}
-            roughness={0.74}
-            flatShading
-          />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
 export function OrbitingPlanet({
   planet,
   simulationStartedAt,
   quality,
+  orbitalVisual,
 }: {
   planet: PlanetDescriptor
   simulationStartedAt: number
   quality: VisualQuality
+  orbitalVisual: PlanetOrbitalVisual
 }) {
   const orbit = useRef<Group>(null)
-  const planetMesh = useRef<Group>(null)
+  const planetSurface = useRef<Group>(null)
   const visual = useMemo(() => generatePlanetVisual(planet, quality), [planet, quality])
   const geometry = useMemo(() => createPlanetGeometry(planet, quality), [planet, quality])
 
   useEffect(() => () => geometry.dispose(), [geometry])
   useFrame(() => {
-    if (!orbit.current || !planetMesh.current) return
+    if (!orbit.current || !planetSurface.current) return
     const elapsedSeconds = (performance.now() - simulationStartedAt) / 1_000
     orbit.current.rotation.y = planetOrbitPhase(planet, elapsedSeconds)
-    planetMesh.current.rotation.y = planet.initialRotation + elapsedSeconds * planet.rotationSpeed
+    planetSurface.current.rotation.y = planet.initialRotation + elapsedSeconds * planet.rotationSpeed
   })
 
   return (
@@ -216,34 +189,36 @@ export function OrbitingPlanet({
         <meshBasicMaterial color="#9aa6d6" transparent opacity={0.11} depthWrite={false} />
       </mesh>
       <group ref={orbit}>
-        <group ref={planetMesh} position={[planet.orbitRadius, 0, 0]}>
-          <mesh geometry={geometry} castShadow receiveShadow>
-            <meshStandardMaterial
-              vertexColors
-              emissive={hsl(planet.appearance.accentHue, 68, 26)}
-              emissiveIntensity={visual.emissiveStrength}
-              roughness={planet.appearance.state === 'archived' ? 0.96 : 0.7}
-              metalness={planet.appearance.surfaceFeature === 'facets' ? 0.18 : 0.02}
-              flatShading
-            />
-          </mesh>
-          <SurfaceFormations planet={planet} visual={visual} />
-          {visual.cloudLayer ? (
-            <mesh scale={1.022}>
-              <icosahedronGeometry args={[planet.radius, 2]} />
+        <group position={[planet.orbitRadius, 0, 0]}>
+          <group ref={planetSurface}>
+            <mesh geometry={geometry} castShadow receiveShadow>
               <meshStandardMaterial
-                color={hsl(planet.appearance.accentHue, 48, 88)}
-                emissive={hsl(planet.appearance.accentHue, 60, 46)}
-                emissiveIntensity={0.16}
-                transparent
-                opacity={0.1}
-                depthWrite={false}
-                wireframe
+                vertexColors
+                emissive={hsl(planet.appearance.accentHue, 68, 26)}
+                emissiveIntensity={visual.emissiveStrength}
+                roughness={planet.appearance.state === 'archived' ? 0.96 : 0.7}
+                metalness={planet.appearance.surfaceFeature === 'facets' ? 0.18 : 0.02}
+                flatShading
               />
             </mesh>
-          ) : null}
-          <PlanetAtmosphere planet={planet} visual={visual} />
-          <PlanetRings planet={planet} visual={visual} />
+            <SurfaceFormations planet={planet} visual={visual} />
+            {visual.cloudLayer ? (
+              <mesh scale={1.022}>
+                <icosahedronGeometry args={[planet.radius, 2]} />
+                <meshStandardMaterial
+                  color={hsl(planet.appearance.accentHue, 48, 88)}
+                  emissive={hsl(planet.appearance.accentHue, 60, 46)}
+                  emissiveIntensity={0.16}
+                  transparent
+                  opacity={0.1}
+                  depthWrite={false}
+                  wireframe
+                />
+              </mesh>
+            ) : null}
+            <PlanetAtmosphere planet={planet} visual={visual} />
+          </group>
+          <PlanetaryCompanions planet={planet} visual={orbitalVisual} quality={quality} />
         </group>
       </group>
     </>

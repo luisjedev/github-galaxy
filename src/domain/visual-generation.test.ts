@@ -164,12 +164,11 @@ describe('generación visual procedural', () => {
     expect(signatures.size).toBe(6)
   })
 
-  test('respeta estados archivado, neutral, vacío y plantilla en el acabado visual', () => {
+  test('respeta estados archivado, neutral y vacío en el acabado visual', () => {
     const system = createGitHubSystem(profile, [
       repository(1, { archived: true, language: 'Python' }),
       repository(2, { language: null }),
       repository(3, { size: 0, language: 'TypeScript' }),
-      repository(4, { is_template: true, language: 'Rust' }),
     ])
     const byId = new Map(
       system.planets.map((planet) => [planet.repository.id, generatePlanetVisual(planet, 'normal')]),
@@ -179,7 +178,5 @@ describe('generación visual procedural', () => {
     expect(byId.get(1)?.emissiveStrength).toBeLessThan(0.1)
     expect(byId.get(2)).toMatchObject({ atmosphere: null })
     expect(byId.get(3)?.radius).toBe(0.7)
-    expect(byId.get(4)?.ringBands).toHaveLength(3)
-    expect(byId.get(4)?.atmosphere).not.toBeNull()
   })
 })

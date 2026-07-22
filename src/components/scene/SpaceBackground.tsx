@@ -12,12 +12,14 @@ import {
   Vector3,
 } from 'three'
 import type { FlightState } from '../../domain/flight'
+import type { ShootingStarEventVisual } from '../../domain/orbital-generation'
 import {
   generateSpaceVisual,
   type NebulaVisual,
   type SpaceVisual,
   type VisualQuality,
 } from '../../domain/visual-generation'
+import { ShootingStars } from './OrbitalDetails'
 import { colorFromHsl } from './visual-utils'
 
 const pointVertexShader = /* glsl */ `
@@ -217,10 +219,14 @@ function DeepSpace({
   visual,
   quality,
   reducedMotion,
+  shootingStars,
+  shootingStarCycleSeconds,
 }: {
   visual: SpaceVisual
   quality: VisualQuality
   reducedMotion: boolean
+  shootingStars: ShootingStarEventVisual[]
+  shootingStarCycleSeconds: number
 }) {
   const group = useRef<Group>(null)
   const geometry = useMemo(() => createPointGeometry(visual.stars), [visual.stars])
@@ -242,6 +248,9 @@ function DeepSpace({
       {visual.nebulas.map((nebula) => (
         <Nebula key={nebula.noiseSeed} visual={nebula} quality={quality} />
       ))}
+      {reducedMotion ? null : (
+        <ShootingStars events={shootingStars} cycleSeconds={shootingStarCycleSeconds} />
+      )}
     </group>
   )
 }
@@ -295,17 +304,27 @@ export function SpaceBackground({
   quality,
   reducedMotion,
   flight,
+  shootingStars,
+  shootingStarCycleSeconds,
 }: {
   seed: number
   quality: VisualQuality
   reducedMotion: boolean
   flight: FlightState
+  shootingStars: ShootingStarEventVisual[]
+  shootingStarCycleSeconds: number
 }) {
   const visual = useMemo(() => generateSpaceVisual(seed, quality), [quality, seed])
 
   return (
     <>
-      <DeepSpace visual={visual} quality={quality} reducedMotion={reducedMotion} />
+      <DeepSpace
+        visual={visual}
+        quality={quality}
+        reducedMotion={reducedMotion}
+        shootingStars={shootingStars}
+        shootingStarCycleSeconds={shootingStarCycleSeconds}
+      />
       <LocalDust visual={visual} flight={flight} reducedMotion={reducedMotion} />
     </>
   )

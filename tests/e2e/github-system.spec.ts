@@ -149,6 +149,31 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
   await expect(scene).toHaveAttribute('data-star-count', /240|960/)
   await expect(scene).toHaveAttribute('data-dust-count', /32|120/)
   await expect(scene).toHaveAttribute('data-nebula-count', /[2-4]/)
+  await expect(scene).toHaveAttribute('data-moon-count', /\d+/)
+  await expect(scene).toHaveAttribute('data-ring-count', /[1-5]/)
+  await expect(scene).toHaveAttribute('data-artificial-object-count', /\d+/)
+  await expect(scene).toHaveAttribute('data-inner-rock-cluster-count', /[1-4]/)
+  await expect(scene).toHaveAttribute('data-asteroid-count', /96|320/)
+  await expect(scene).toHaveAttribute('data-shooting-star-event-count', /0|8/)
+
+  const sceneDetails = await scene.evaluate((element) => ({
+    quality: element.getAttribute('data-visual-quality'),
+    moons: Number(element.getAttribute('data-moon-count')),
+    asteroids: Number(element.getAttribute('data-asteroid-count')),
+    shootingStars: Number(element.getAttribute('data-shooting-star-event-count')),
+    beltInnerRadius: Number(element.getAttribute('data-asteroid-belt-inner-radius')),
+  }))
+  expect(sceneDetails.moons).toBeGreaterThanOrEqual(5)
+  expect(sceneDetails.asteroids).toBe(sceneDetails.quality === 'normal' ? 320 : 96)
+  expect(sceneDetails.shootingStars).toBe(sceneDetails.quality === 'normal' ? 8 : 0)
+  const furthestPlanetSurface = await page.locator('.planet-orbit').evaluateAll((orbits) =>
+    Math.max(...orbits.map((orbit) =>
+      Number(orbit.getAttribute('data-orbit-radius')) +
+      Number(orbit.getAttribute('data-planet-radius')),
+    )),
+  )
+  expect(sceneDetails.beltInnerRadius).toBeGreaterThan(furthestPlanetSurface)
+
   await testInfo.attach('composicion-sembrada.png', {
     body: await page.screenshot(),
     contentType: 'image/png',
