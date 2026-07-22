@@ -1,4 +1,9 @@
-import { useEffect, useReducer, useState, type CSSProperties, type FormEvent } from 'react'
+import {
+  useEffect,
+  useReducer,
+  useState,
+  type FormEvent,
+} from 'react'
 import {
   transitionAppState,
   type AppError,
@@ -6,17 +11,16 @@ import {
   type LoadingStage,
 } from './domain/app-state'
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
-import {
-  FULL_ROTATION_RADIANS,
-  type GitHubSystem,
-  type PlanetDescriptor,
-} from './domain/github-system'
+import { describeShipAppearance } from './domain/flight'
+import { type GitHubSystem, type PlanetDescriptor } from './domain/github-system'
+import { GalaxyScene } from './components/GalaxyScene'
+import { useFlightControls } from './hooks/use-flight-controls'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
 import { GitHubRequestError, loadGitHubSystem } from './platform/github-client'
 
 const controls = [
-  ['W / S', 'Avanzar · frenar'],
+  ['W / S', 'Avanzar · frenar / reversa'],
   ['A / D', 'Girar'],
   ['J / K', 'Descender · subir'],
   ['Espacio', 'Turbo'],
@@ -178,27 +182,8 @@ function Loading({ username, stage }: { username: string; stage: LoadingStage })
   )
 }
 
-function Planet({ planet, orbitalExtent }: { planet: PlanetDescriptor; orbitalExtent: number }) {
+function Planet({ planet }: { planet: PlanetDescriptor }) {
   const { appearance, repository } = planet
-  const phaseProgress = planet.initialPhase / FULL_ROTATION_RADIANS
-  const rotationProgress = planet.initialRotation / FULL_ROTATION_RADIANS
-  const rotationPeriodSeconds = FULL_ROTATION_RADIANS / planet.rotationSpeed
-  const orbitSize = orbitalExtent === 0 ? 0 : (planet.orbitRadius / orbitalExtent) * 100
-  const planetStyle = {
-    '--orbit-size': `${orbitSize}%`,
-    '--orbit-period': `${planet.orbitPeriodSeconds}s`,
-    '--orbit-delay': `${-planet.orbitPeriodSeconds * phaseProgress}s`,
-    '--planet-size': `${(planet.radius / planet.orbitRadius) * 100}%`,
-    '--planet-base-hue': `${appearance.baseHue}`,
-    '--planet-accent-hue': `${appearance.accentHue}`,
-    '--planet-saturation': `${appearance.saturation}%`,
-    '--planet-lightness': `${appearance.lightness}%`,
-    '--planet-luminosity': `${appearance.luminosity}`,
-    '--planet-surface-angle': `${appearance.surfaceSeed % 360}deg`,
-    '--planet-ring-hue': `${appearance.ringHue}`,
-    '--rotation-period': `${rotationPeriodSeconds}s`,
-    '--rotation-delay': `${-rotationPeriodSeconds * rotationProgress}s`,
-  } as CSSProperties
   const appearanceDescription = [
     appearance.state === 'archived'
       ? 'archivado'
@@ -214,26 +199,24 @@ function Planet({ planet, orbitalExtent }: { planet: PlanetDescriptor; orbitalEx
   return (
     <div
       className="planet-orbit"
-      style={planetStyle}
       role="img"
       aria-label={`Planeta ${repository.name}, ${appearanceDescription}`}
       data-celestial-body="planet"
       data-repository-id={repository.id}
       data-orbit-radius={planet.orbitRadius}
       data-orbit-period={planet.orbitPeriodSeconds}
+      data-planet-radius={planet.radius}
     >
-      <span className="planet-orbit__motion" aria-hidden="true">
-        <span
-          className={`procedural-planet procedural-planet--${appearance.surfaceFeature}`}
-          data-appearance-state={appearance.state}
-          data-biome={appearance.biome}
-          data-language-family={appearance.languageFamily ?? 'none'}
-          data-size-state={repository.size === 0 ? 'empty' : 'populated'}
-          data-surface-feature={appearance.surfaceFeature}
-          data-template={appearance.hasRing}
-        >
-          {appearance.hasRing ? <span className="planet-ring" /> : null}
-        </span>
+      <span
+        className={`procedural-planet procedural-planet--${appearance.surfaceFeature}`}
+        data-appearance-state={appearance.state}
+        data-biome={appearance.biome}
+        data-language-family={appearance.languageFamily ?? 'none'}
+        data-size-state={repository.size === 0 ? 'empty' : 'populated'}
+        data-surface-feature={appearance.surfaceFeature}
+        data-template={appearance.hasRing}
+      >
+        {appearance.hasRing ? <span className="planet-ring" /> : null}
       </span>
     </div>
   )
@@ -241,23 +224,18 @@ function Planet({ planet, orbitalExtent }: { planet: PlanetDescriptor; orbitalEx
 
 function Exploration({ system }: { system: GitHubSystem }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
-  const orbitalExtent = Math.max(
-    0,
-    ...planets.map((planet) => planet.orbitRadius + planet.radius),
-  )
-  const starStyle = {
-    '--star-hue': `${starAppearance.primaryHue}`,
-    '--star-corona-hue': `${starAppearance.coronaHue}`,
-    '--star-accent-hue': `${starAppearance.accentHue}`,
-    '--star-flare': `${36 + (starSeed % 24)}%`,
-    '--star-flare-radius': `${16 * starAppearance.flareScale}rem`,
-    '--star-luminosity': `${starAppearance.luminosity}`,
-    '--star-facet-angle': `${starAppearance.facetSeed % 360}deg`,
-    '--star-size': orbitalExtent === 0 ? '30%' : `${(4 / orbitalExtent) * 100}%`,
-  } as CSSProperties
+  const { experienceRef, flight, initialFlight } = useFlightControls(system)
+  const shipAppearance = describeShipAppearance(system)
 
   return (
-    <main className="system-layout" data-app-state="exploration">
+    <main
+      ref={experienceRef}
+      className="system-layout"
+      data-app-state="exploration"
+      aria-label="Experiencia de vuelo"
+      tabIndex={0}
+      autoFocus
+    >
       <section className="system-summary">
         <p className="eyebrow">Sistema listo para explorar</p>
         <h1>Sistema de {profile.login}</h1>
@@ -265,22 +243,61 @@ function Exploration({ system }: { system: GitHubSystem }) {
         {planets.length > 0 ? <p>{planets.length} planetas seleccionados</p> : null}
         {ownRepositoryCount === 0 ? <p>Una estrella solitaria espera tu visita.</p> : null}
       </section>
-      <div className="system-scene" aria-label={`Sistema planetario de ${profile.login}`}>
+
+      <GalaxyScene system={system} flight={flight} />
+
+      <div className="scene-observability" aria-label={`Sistema planetario de ${profile.login}`}>
         {planets.map((planet) => (
-          <Planet key={planet.repository.id} planet={planet} orbitalExtent={orbitalExtent} />
+          <Planet key={planet.repository.id} planet={planet} />
         ))}
         <div
           className="procedural-star"
-          style={starStyle}
           role="img"
           aria-label={`Estrella de ${profile.login}`}
           data-star-seed={starSeed}
           data-primary-hue={starAppearance.primaryHue}
           data-language-families={starAppearance.languageFamilies.join(',')}
+        />
+        <div
+          className="procedural-ship"
+          role="img"
+          aria-label="Nave procedural del perfil con luz y estela tecnológicas"
+          data-testid="player-ship"
+          data-primary-hue={shipAppearance.primaryHue}
+          data-accent-hue={shipAppearance.accentHue}
+          data-initial-destination={initialFlight.destinationRepositoryId ?? 'star'}
         >
-          <span aria-hidden="true" />
+          Nave low-poly con luz y estela tecnológicas
         </div>
       </div>
+
+      <output
+        className="flight-hud"
+        data-testid="flight-state"
+        data-x={flight.x.toFixed(3)}
+        data-z={flight.z.toFixed(3)}
+        data-altitude={flight.altitude.toFixed(3)}
+        data-heading={flight.heading.toFixed(3)}
+        data-speed={flight.speed.toFixed(3)}
+        data-turbo={flight.turbo}
+        aria-label="Estado de navegación"
+      >
+        <span>Velocidad {Math.round(flight.speed)}</span>
+        <span>Altitud {Math.round(flight.altitude)}</span>
+        <strong>{flight.turbo ? 'Turbo activo' : 'Impulso normal'}</strong>
+      </output>
+
+      <details className="flight-help" open>
+        <summary>Guía de vuelo</summary>
+        <dl>
+          {controls.map(([key, action]) => (
+            <div key={key}>
+              <dt>{key}</dt>
+              <dd>{action}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
     </main>
   )
 }

@@ -14,16 +14,18 @@
     "test:all": "pnpm test && pnpm test:e2e"
   },
   "dependencies": {
+    "@react-three/fiber": "^9.6.1",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@eslint/js": "latest",
-    "@vitejs/plugin-react": "latest",
     "@playwright/test": "latest",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
     "eslint": "latest",
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-refresh": "latest",

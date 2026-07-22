@@ -132,7 +132,7 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
   await expect(archived).toHaveAttribute('data-biome', 'dead')
   await expect(empty).toHaveAttribute('data-size-state', 'empty')
   await expect(template).toHaveAttribute('data-template', 'true')
-  await expect(template.locator('.planet-ring')).toBeVisible()
+  await expect(template.locator('.planet-ring')).toHaveCount(1)
 
   const star = page.getByLabel('Estrella de stargazer')
   await expect(star).toHaveAttribute('data-primary-hue', '215')
@@ -159,24 +159,22 @@ test('carga y comparte desde el menú un sistema obtenido de todas las páginas 
   await expect(page.getByLabel('Estrella de stargazer')).toHaveAttribute('data-star-seed', /\d+/)
   await expect(page.getByText('101 proyectos públicos encontrados')).toBeVisible()
   await expect(page.locator('[data-celestial-body="planet"]')).toHaveCount(20)
-  await expect(page.locator('[data-repository-id="101"]')).toBeVisible()
+  await expect(page.locator('[data-repository-id="101"]')).toHaveCount(1)
   await expect(page.locator('[data-repository-id="81"]')).toHaveCount(0)
 
   const orbitGeometry = await page.locator('.planet-orbit').evaluateAll((orbits) =>
     orbits
       .map((orbit) => ({
-        diameter: orbit.getBoundingClientRect().width,
-        planetDiameter: Number.parseFloat(
-          getComputedStyle(orbit.querySelector('.procedural-planet')!).width,
-        ),
+        orbitRadius: Number(orbit.getAttribute('data-orbit-radius')),
+        planetRadius: Number(orbit.getAttribute('data-planet-radius')),
       }))
-      .sort((left, right) => left.diameter - right.diameter),
+      .sort((left, right) => left.orbitRadius - right.orbitRadius),
   )
   for (let index = 1; index < orbitGeometry.length; index += 1) {
     const inner = orbitGeometry[index - 1]
     const outer = orbitGeometry[index]
     const visibleGap =
-      (outer.diameter - inner.diameter - outer.planetDiameter - inner.planetDiameter) / 2
+      outer.orbitRadius - inner.orbitRadius - outer.planetRadius - inner.planetRadius
     expect(visibleGap).toBeGreaterThanOrEqual(0)
   }
 

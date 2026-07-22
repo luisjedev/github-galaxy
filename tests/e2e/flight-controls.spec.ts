@@ -1,0 +1,158 @@
+import { expect, test, type Page } from '@playwright/test'
+
+const profile = {
+  id: 404,
+  login: 'pilot',
+  name: 'Galaxy Pilot',
+  avatar_url: 'https://avatars.example/pilot.png',
+  html_url: 'https://github.com/pilot',
+  bio: null,
+  followers: 12,
+  public_repos: 3,
+}
+
+const repositories = [
+  {
+    id: 1,
+    name: 'typescript-flight',
+    html_url: 'https://github.com/pilot/typescript-flight',
+    description: null,
+    fork: false,
+    archived: false,
+    is_template: false,
+    language: 'TypeScript',
+    stargazers_count: 10,
+    forks_count: 0,
+    size: 120,
+    updated_at: '2026-01-03T00:00:00Z',
+  },
+  {
+    id: 2,
+    name: 'rust-engine',
+    html_url: 'https://github.com/pilot/rust-engine',
+    description: null,
+    fork: false,
+    archived: false,
+    is_template: false,
+    language: 'Rust',
+    stargazers_count: 4,
+    forks_count: 0,
+    size: 80,
+    updated_at: '2026-01-02T00:00:00Z',
+  },
+]
+
+async function interceptGitHub(page: Page) {
+  await page.route('https://api.github.com/**', async (route) => {
+    const url = new URL(route.request().url())
+    await route.fulfill({
+      json: url.pathname.endsWith('/repos') ? repositories : profile,
+      headers: { 'access-control-expose-headers': 'Link' },
+    })
+  })
+}
+
+async function numberAttribute(page: Page, name: string) {
+  const value = await page.getByTestId('flight-state').getAttribute(name)
+  return Number(value)
+}
+
+test.beforeEach(async ({ page }) => {
+  await interceptGitHub(page)
+  await page.goto('/?user=pilot')
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+})
+
+test('muestra una única nave procedural determinista, la cámara de seguimiento y la ayuda completa', async ({
+  page,
+}) => {
+  const ship = page.getByTestId('player-ship')
+
+  await expect(ship).toHaveCount(1)
+  await expect(ship).toHaveAttribute('data-primary-hue', '16')
+  await expect(ship).toHaveAttribute('data-accent-hue', '215')
+  await expect(ship).toHaveAttribute('data-initial-destination', '1')
+  expect(await numberAttribute(page, 'data-heading')).toBeCloseTo(1.178, 2)
+  await expect(
+    page.getByRole('img', {
+      name: 'Escena tridimensional con cámara automática siguiendo la nave',
+    }),
+  ).toBeVisible()
+  await expect(page.getByText('W / S', { exact: true })).toBeVisible()
+  await expect(page.getByText('Avanzar · frenar / reversa', { exact: true })).toBeVisible()
+  await expect(page.getByText('A / D', { exact: true })).toBeVisible()
+  await expect(page.getByText('J / K', { exact: true })).toBeVisible()
+  await expect(page.getByText('Espacio', { exact: true })).toBeVisible()
+  await expect(page.getByText('E', { exact: true })).toBeVisible()
+  await expect(page.getByText('R', { exact: true })).toBeVisible()
+  await expect(page.getByText('Esc', { exact: true })).toBeVisible()
+})
+
+test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', async ({ page }) => {
+  const initialX = await numberAttribute(page, 'data-x')
+  const initialZ = await numberAttribute(page, 'data-z')
+  const initialHeading = await numberAttribute(page, 'data-heading')
+
+  await page.keyboard.down('w')
+  await expect
+    .poll(
+      async () =>
+        Math.abs((await numberAttribute(page, 'data-x')) - initialX) +
+        Math.abs((await numberAttribute(page, 'data-z')) - initialZ),
+    )
+    .toBeGreaterThan(0.2)
+  await page.keyboard.up('w')
+
+  await page.keyboard.down('a')
+  await expect
+    .poll(async () => Math.abs((await numberAttribute(page, 'data-heading')) - initialHeading))
+    .toBeGreaterThan(0.1)
+  await page.keyboard.up('a')
+
+  const headingAfterLeftTurn = await numberAttribute(page, 'data-heading')
+  await page.keyboard.down('d')
+  await expect
+    .poll(async () => await numberAttribute(page, 'data-heading'))
+    .toBeGreaterThan(headingAfterLeftTurn + 0.1)
+  await page.keyboard.up('d')
+
+  const altitudeBeforeClimb = await numberAttribute(page, 'data-altitude')
+  await page.keyboard.down('k')
+  await expect
+    .poll(async () => await numberAttribute(page, 'data-altitude'))
+    .toBeGreaterThan(altitudeBeforeClimb)
+  await page.keyboard.up('k')
+
+  const altitudeBeforeDescent = await numberAttribute(page, 'data-altitude')
+  await page.keyboard.down('j')
+  await expect
+    .poll(async () => await numberAttribute(page, 'data-altitude'))
+    .toBeLessThan(altitudeBeforeDescent)
+  await page.keyboard.up('j')
+
+  await page.keyboard.down('s')
+  await expect
+    .poll(async () => await numberAttribute(page, 'data-speed'), { timeout: 5_000 })
+    .toBeLessThan(0)
+  await page.keyboard.up('s')
+})
+
+test('mantener Espacio activa el turbo sin desplazar el navegador cuando la experiencia tiene foco', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    document.body.style.height = '300vh'
+  })
+  await page.locator('[data-app-state="exploration"]').focus()
+  const initialScroll = await page.evaluate(() => window.scrollY)
+
+  await page.keyboard.down('w')
+  await page.keyboard.down(' ')
+  await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'true')
+  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBeGreaterThan(8)
+  expect(await page.evaluate(() => window.scrollY)).toBe(initialScroll)
+
+  await page.keyboard.up(' ')
+  await page.keyboard.up('w')
+  await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'false')
+})
