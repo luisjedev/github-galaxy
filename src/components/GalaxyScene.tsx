@@ -364,6 +364,7 @@ export const GalaxyScene = memo(function GalaxyScene({
       data-star-count={settings.quality === 'normal' ? 960 : 240}
       data-dust-count={settings.quality === 'normal' ? 120 : 32}
       data-nebula-count={settings.quality === 'normal' ? 2 + (system.starSeed % 3) : 2}
+      data-distant-galaxy-count={settings.quality === 'normal' ? 3 + ((system.starSeed >>> 0) % 4) : 2}
       data-moon-count={moonCount}
       data-ring-count={ringCount}
       data-artificial-object-count={artificialObjectCount}

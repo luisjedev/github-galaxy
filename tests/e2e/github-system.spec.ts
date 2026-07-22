@@ -149,6 +149,7 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
   await expect(scene).toHaveAttribute('data-star-count', /240|960/)
   await expect(scene).toHaveAttribute('data-dust-count', /32|120/)
   await expect(scene).toHaveAttribute('data-nebula-count', /[2-4]/)
+  await expect(scene).toHaveAttribute('data-distant-galaxy-count', /[2-6]/)
   await expect(scene).toHaveAttribute('data-moon-count', /\d+/)
   await expect(scene).toHaveAttribute('data-ring-count', /[1-5]/)
   await expect(scene).toHaveAttribute('data-artificial-object-count', /\d+/)

@@ -67,6 +67,8 @@ describe('generación visual procedural', () => {
     expect(first.dust).toHaveLength(120)
     expect(first.nebulas.length).toBeGreaterThanOrEqual(2)
     expect(first.nebulas.length).toBeLessThanOrEqual(4)
+    expect(first.galaxies.length).toBeGreaterThanOrEqual(3)
+    expect(first.galaxies.length).toBeLessThanOrEqual(6)
     expect(new Set(first.stars.map((star) => star.layer))).toEqual(new Set([0, 1, 2]))
     expectFiniteTree(first)
 
@@ -98,6 +100,17 @@ describe('generación visual procedural', () => {
       expect(nebula.opacity).toBeGreaterThanOrEqual(0.08)
       expect(nebula.opacity).toBeLessThanOrEqual(0.2)
     }
+
+    for (const galaxy of first.galaxies) {
+      expect(Math.hypot(...galaxy.position)).toBeGreaterThanOrEqual(104)
+      expect(Math.hypot(...galaxy.position)).toBeLessThanOrEqual(134)
+      expect(galaxy.scale[0]).toBeGreaterThanOrEqual(7)
+      expect(galaxy.scale[0]).toBeLessThanOrEqual(20)
+      expect(galaxy.opacity).toBeGreaterThanOrEqual(0.24)
+      expect(galaxy.opacity).toBeLessThanOrEqual(0.48)
+      expect(galaxy.armCount).toBeGreaterThanOrEqual(2)
+      expect(galaxy.armCount).toBeLessThanOrEqual(4)
+    }
   })
 
   test('usa una calidad reducida estable para limitar DPR, estrellas, polvo y nebulosas', () => {
@@ -114,7 +127,9 @@ describe('generación visual procedural', () => {
     expect(reduced.stars).toHaveLength(240)
     expect(reduced.dust).toHaveLength(32)
     expect(reduced.nebulas).toHaveLength(2)
+    expect(reduced.galaxies).toHaveLength(2)
     expect(reduced.stars.length).toBeLessThan(normal.stars.length)
+    expect(reduced.galaxies.length).toBeLessThan(normal.galaxies.length)
   })
 
   test('mantiene acotada la composición con cero y veinte planetas', () => {

@@ -16,6 +16,7 @@ import type { FlightState } from '../../domain/flight'
 import type { ShootingStarEventVisual } from '../../domain/orbital-generation'
 import {
   generateSpaceVisual,
+  type DistantGalaxyVisual,
   type NebulaVisual,
   type SpaceVisual,
   type VisualQuality,
@@ -110,6 +111,42 @@ const nebulaFragmentShader = /* glsl */ `
     vec3 color = mix(uColor, uSecondaryColor, smoothstep(0.3, 0.78, filaments));
     float alpha = density * uOpacity;
     if (alpha < 0.004) discard;
+    gl_FragColor = vec4(color, alpha);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
+const galaxyFragmentShader = /* glsl */ `
+  varying vec2 vUv;
+  uniform vec3 uOuterColor;
+  uniform vec3 uCoreColor;
+  uniform float uOpacity;
+  uniform float uSeed;
+  uniform float uArmCount;
+  uniform float uSpiralMix;
+
+  float random(vec2 point) {
+    return fract(sin(dot(point, vec2(127.1, 311.7)) + uSeed) * 43758.5453);
+  }
+
+  void main() {
+    vec2 centered = (vUv - 0.5) * 2.0;
+    float radius = length(centered);
+    float angle = atan(centered.y, centered.x);
+    float edge = 1.0 - smoothstep(0.48, 1.0, radius);
+    float disc = exp(-radius * 3.2);
+    float arms = pow(0.5 + 0.5 * cos(
+      angle * uArmCount - radius * 11.0 + uSeed * 0.00001
+    ), 3.0);
+    float dust = 0.72 + random(floor(centered * 38.0)) * 0.4;
+    float spiral = disc * mix(0.24, 1.0, arms) * dust;
+    float elliptical = pow(max(0.0, 1.0 - radius), 2.5) * mix(0.82, 1.08, dust);
+    float core = exp(-radius * 13.0);
+    float density = mix(elliptical, spiral, uSpiralMix) * edge;
+    float alpha = (density * 0.86 + core) * uOpacity;
+    if (alpha < 0.006) discard;
+    vec3 color = mix(uOuterColor, uCoreColor, clamp(core * 1.8, 0.0, 1.0));
     gl_FragColor = vec4(color, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -216,6 +253,51 @@ function Nebula({
   )
 }
 
+function DistantGalaxy({ visual }: { visual: DistantGalaxyVisual }) {
+  const quaternion = useMemo(() => {
+    const helper = new Object3D()
+    helper.position.set(...visual.position)
+    helper.lookAt(0, 0, 0)
+    return helper.quaternion.clone().multiply(
+      new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), visual.rotation),
+    )
+  }, [visual])
+  const uniforms = useMemo(
+    () => ({
+      uOuterColor: { value: colorFromHsl(visual.hue, 0.58, 0.57) },
+      uCoreColor: { value: colorFromHsl(visual.coreHue, 0.82, 0.72) },
+      uOpacity: { value: visual.opacity },
+      uSeed: { value: visual.noiseSeed },
+      uArmCount: { value: visual.armCount },
+      uSpiralMix: { value: visual.kind === 'spiral' ? 1 : 0 },
+    }),
+    [visual],
+  )
+
+  return (
+    <mesh
+      position={visual.position}
+      scale={visual.scale}
+      quaternion={quaternion}
+      frustumCulled={false}
+      renderOrder={-18}
+    >
+      <planeGeometry args={[1, 1, 1, 1]} />
+      <shaderMaterial
+        uniforms={uniforms}
+        vertexShader={nebulaVertexShader}
+        fragmentShader={galaxyFragmentShader}
+        transparent
+        depthWrite={false}
+        depthTest
+        side={DoubleSide}
+        blending={AdditiveBlending}
+        toneMapped={false}
+      />
+    </mesh>
+  )
+}
+
 function DeepSpace({
   visual,
   quality,
@@ -248,6 +330,9 @@ function DeepSpace({
       <points geometry={geometry} material={material} frustumCulled={false} />
       {visual.nebulas.map((nebula) => (
         <Nebula key={nebula.noiseSeed} visual={nebula} quality={quality} />
+      ))}
+      {visual.galaxies.map((galaxy) => (
+        <DistantGalaxy key={galaxy.noiseSeed} visual={galaxy} />
       ))}
       {reducedMotion ? null : (
         <ShootingStars events={shootingStars} cycleSeconds={shootingStarCycleSeconds} />

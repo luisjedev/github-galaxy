@@ -39,10 +39,23 @@ export interface NebulaVisual {
   noiseSeed: number
 }
 
+export interface DistantGalaxyVisual {
+  kind: 'spiral' | 'elliptical'
+  position: Vector3Tuple
+  scale: Vector3Tuple
+  rotation: number
+  hue: number
+  coreHue: number
+  opacity: number
+  armCount: number
+  noiseSeed: number
+}
+
 export interface SpaceVisual {
   stars: StarVisualPoint[]
   dust: DustVisualPoint[]
   nebulas: NebulaVisual[]
+  galaxies: DistantGalaxyVisual[]
 }
 
 export type SurfaceFormationKind =
@@ -218,11 +231,45 @@ function generateNebulas(seed: number, quality: VisualQuality): NebulaVisual[] {
   })
 }
 
+function generateDistantGalaxies(
+  seed: number,
+  quality: VisualQuality,
+): DistantGalaxyVisual[] {
+  const count = quality === 'reduced' ? 2 : 3 + ((seed >>> 0) % 4)
+  const random = mulberry32(seed ^ 0x6c8e9cf5)
+
+  return Array.from({ length: count }, (_, index) => {
+    const anchorAngle = ((index === 0 ? -24 : 27) + range(random, -7, 7)) * (Math.PI / 180)
+    const direction = index < 2
+      ? normalize([
+          Math.sin(anchorAngle),
+          range(random, index === 0 ? 0.1 : -0.3, index === 0 ? 0.34 : -0.08),
+          Math.cos(anchorAngle),
+        ])
+      : randomDirection(random)
+    const kind = random() < 0.72 ? 'spiral' : 'elliptical'
+    const width = range(random, kind === 'spiral' ? 10 : 7, kind === 'spiral' ? 20 : 14)
+
+    return {
+      kind,
+      position: roundedVector(scaleVector(direction, range(random, 104, 134))),
+      scale: [round(width), round(width * range(random, 0.28, 0.58)), 1],
+      rotation: round(range(random, 0, FULL_TURN)),
+      hue: round(range(random, 188, 282)),
+      coreHue: round(range(random, 28, 58)),
+      opacity: round(range(random, 0.24, 0.48)),
+      armCount: 2 + Math.floor(random() * 3),
+      noiseSeed: Math.floor(random() * UINT32_MAX),
+    }
+  })
+}
+
 export function generateSpaceVisual(seed: number, quality: VisualQuality): SpaceVisual {
   return {
     stars: generateStars(seed, quality),
     dust: generateDust(seed, quality),
     nebulas: generateNebulas(seed, quality),
+    galaxies: generateDistantGalaxies(seed, quality),
   }
 }
 
