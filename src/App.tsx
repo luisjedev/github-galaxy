@@ -12,6 +12,7 @@ import {
 } from './domain/app-state'
 import {
   atmosphereRadius,
+  collisionRadius,
   informationZoneRadius,
   STAR_RADIUS,
   type ActiveCelestialBody,
@@ -213,6 +214,7 @@ function Planet({ planet }: { planet: PlanetDescriptor }) {
       data-orbit-period={planet.orbitPeriodSeconds}
       data-planet-radius={planet.radius}
       data-body-radius={planet.radius}
+      data-collision-radius={collisionRadius(planet.radius)}
       data-atmosphere-radius={atmosphereRadius(planet.radius)}
       data-information-radius={informationZoneRadius(planet.radius)}
     >
@@ -372,6 +374,7 @@ function Exploration({ system }: { system: GitHubSystem }) {
           data-primary-hue={starAppearance.primaryHue}
           data-language-families={starAppearance.languageFamilies.join(',')}
           data-body-radius={STAR_RADIUS}
+          data-collision-radius={collisionRadius(STAR_RADIUS)}
           data-atmosphere-radius={atmosphereRadius(STAR_RADIUS)}
           data-information-radius={informationZoneRadius(STAR_RADIUS)}
         />

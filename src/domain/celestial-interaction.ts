@@ -6,6 +6,7 @@ import {
 } from './github-system'
 
 export const STAR_RADIUS = 4
+export const CELESTIAL_COLLISION_CLEARANCE = 0.2
 export const CELESTIAL_ATMOSPHERE_CLEARANCE = 2
 export const INFORMATION_ZONE_CLEARANCE = 6
 
@@ -33,6 +34,10 @@ export type ActiveCelestialBody =
       planet: PlanetDescriptor
       surfaceDistance: number
     }
+
+export function collisionRadius(bodyRadius: number): number {
+  return bodyRadius + CELESTIAL_COLLISION_CLEARANCE
+}
 
 export function atmosphereRadius(bodyRadius: number): number {
   return bodyRadius + CELESTIAL_ATMOSPHERE_CLEARANCE
@@ -99,21 +104,33 @@ function dot(left: Position, right: Position): number {
 
 const ATMOSPHERE_CONTACT_TOLERANCE = 0.01
 
-function collisionBodies(system: GitHubSystem, elapsedSeconds: number): CollisionBody[] {
+function celestialBodies(
+  system: GitHubSystem,
+  elapsedSeconds: number,
+  radiusFor: (bodyRadius: number) => number,
+): CollisionBody[] {
   return [
     {
       key: 'star',
       kind: 'star',
       position: { x: 0, y: 0, z: 0 },
-      radius: atmosphereRadius(STAR_RADIUS),
+      radius: radiusFor(STAR_RADIUS),
     },
     ...system.planets.map((planet) => ({
       key: `planet:${planet.repository.id}` as const,
       kind: 'planet' as const,
       position: planetPosition(planet, elapsedSeconds),
-      radius: atmosphereRadius(planet.radius),
+      radius: radiusFor(planet.radius),
     })),
   ]
+}
+
+function collisionBodies(system: GitHubSystem, elapsedSeconds: number): CollisionBody[] {
+  return celestialBodies(system, elapsedSeconds, collisionRadius)
+}
+
+function atmosphereBodies(system: GitHubSystem, elapsedSeconds: number): CollisionBody[] {
+  return celestialBodies(system, elapsedSeconds, atmosphereRadius)
 }
 
 function movingCollisionBodies(
@@ -140,7 +157,7 @@ export function detectAtmosphereContact(
   elapsedSeconds: number,
 ): AtmosphereContact | null {
   const position = flightPosition(flight)
-  const body = collisionBodies(system, elapsedSeconds)
+  const body = atmosphereBodies(system, elapsedSeconds)
     .filter(
       (candidate) =>
         Math.hypot(

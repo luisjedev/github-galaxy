@@ -20,22 +20,30 @@ function ChaseCamera({ flight }: { flight: FlightState }) {
   const { camera } = useThree()
   const desiredPosition = useRef(new Vector3())
   const lookAt = useRef(new Vector3())
+  const cameraPitch = useRef(0)
 
   useFrame((_, elapsedSeconds) => {
-    const forwardX = Math.sin(flight.heading)
-    const forwardZ = Math.cos(flight.heading)
+    const frameSeconds = Math.min(elapsedSeconds, 0.05)
+    const targetPitch = flight.pitch * 0.45
+    cameraPitch.current +=
+      (targetPitch - cameraPitch.current) * (1 - Math.exp(-4 * frameSeconds))
+
+    const horizontalForward = Math.cos(cameraPitch.current)
+    const forwardX = Math.sin(flight.heading) * horizontalForward
+    const forwardY = -Math.sin(cameraPitch.current)
+    const forwardZ = Math.cos(flight.heading) * horizontalForward
     desiredPosition.current.set(
       flight.x - forwardX * 0.85,
-      flight.altitude + 0.22,
+      flight.altitude + 0.22 - forwardY * 0.85,
       flight.z - forwardZ * 0.85,
     )
     camera.position.lerp(
       desiredPosition.current,
-      1 - Math.exp(-7 * Math.min(elapsedSeconds, 0.05)),
+      1 - Math.exp(-7 * frameSeconds),
     )
     lookAt.current.set(
       flight.x + forwardX * 7,
-      flight.altitude + 0.05,
+      flight.altitude + 0.05 + forwardY * 7,
       flight.z + forwardZ * 7,
     )
     camera.lookAt(lookAt.current)

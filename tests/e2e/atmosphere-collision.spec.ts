@@ -52,8 +52,10 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
 
   const star = page.getByLabel('Estrella de pilot')
   const atmosphereRadius = Number(await star.getAttribute('data-atmosphere-radius'))
+  const collisionRadius = Number(await star.getAttribute('data-collision-radius'))
   const bodyRadius = Number(await star.getAttribute('data-body-radius'))
-  expect(atmosphereRadius).toBeGreaterThan(bodyRadius)
+  expect(collisionRadius - bodyRadius).toBeLessThanOrEqual(0.25)
+  expect(atmosphereRadius).toBeGreaterThan(collisionRadius)
 
   await page.keyboard.down('w')
   await page.keyboard.down(' ')
@@ -67,9 +69,10 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
     'star',
   )
 
+  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBe(0)
   const contactX = await numberAttribute(page, 'data-x')
   const contactZ = await numberAttribute(page, 'data-z')
-  expect(Math.hypot(contactX, contactZ)).toBeGreaterThanOrEqual(atmosphereRadius - 0.01)
+  expect(Math.hypot(contactX, contactZ)).toBeGreaterThanOrEqual(collisionRadius - 0.01)
   expect(contactZ).toBeLessThan(0)
 
   await page.waitForTimeout(500)
@@ -83,13 +86,14 @@ test('el turbo se detiene ante la atmósfera sin rebote y la nave puede separars
   await expect
     .poll(async () => await numberAttribute(page, 'data-z'))
     .toBeLessThan(contactZ - 0.2)
-  await page.keyboard.up('s')
-
-  await expect(warning).toHaveCount(0)
   await expect(page.getByTestId('flight-state')).toHaveAttribute(
     'data-atmosphere-contact',
     'none',
+    { timeout: 15_000 },
   )
+  await page.keyboard.up('s')
+
+  await expect(warning).toHaveCount(0)
 })
 
 test('los planetas orbitales aplican el mismo límite atmosférico', async ({ page }) => {
@@ -106,15 +110,15 @@ test('los planetas orbitales aplican el mismo límite atmosférico', async ({ pa
     'data-atmosphere-contact',
     'planet:1',
   )
-  expect(await numberAttribute(page, 'data-speed')).toBe(0)
+  await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBe(0)
 
+  const contactX = await numberAttribute(page, 'data-x')
   await page.keyboard.up(' ')
   await page.keyboard.up('w')
   await page.keyboard.down('s')
-  await expect(page.getByTestId('flight-state')).toHaveAttribute(
-    'data-atmosphere-contact',
-    'none',
-  )
+  await expect
+    .poll(async () => await numberAttribute(page, 'data-x'))
+    .toBeLessThan(contactX - 0.1)
   await page.keyboard.up('s')
-  await expect(warning).toHaveCount(0)
+  await expect(warning).toBeVisible()
 })
