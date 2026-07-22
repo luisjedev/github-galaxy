@@ -1,18 +1,31 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useRef } from 'react'
-import { Frustum, Group, Matrix4, Sphere, Vector3 } from 'three'
+import { useRef, useState } from 'react'
+import {
+  ACESFilmicToneMapping,
+  Frustum,
+  Matrix4,
+  Sphere,
+  SRGBColorSpace,
+  Vector3,
+} from 'three'
 import {
   describeShipAppearance,
-  NORMAL_FLIGHT_SPEED,
   type FlightState,
 } from '../domain/flight'
 import { STAR_RADIUS, type CelestialBodyKey } from '../domain/celestial-interaction'
 import {
-  planetOrbitPhase,
   planetPositionAt,
   type GitHubSystem,
-  type PlanetDescriptor,
 } from '../domain/github-system'
+import {
+  selectVisualQuality,
+  type VisualQuality,
+} from '../domain/visual-generation'
+import { OrbitingPlanet } from './scene/ProceduralPlanet'
+import { ProceduralShip, SHIP_WORLD_SCALE } from './scene/ProceduralShip'
+import { ProceduralStar } from './scene/ProceduralStar'
+import { SpaceBackground } from './scene/SpaceBackground'
+import { hsl } from './scene/visual-utils'
 
 export type CelestialMarkerStatus = 'visible' | 'offscreen' | 'behind'
 
@@ -29,8 +42,13 @@ export interface CelestialMarkerState {
   direction?: Point2D
 }
 
+interface VisualSettings {
+  quality: VisualQuality
+  reducedMotion: boolean
+  dpr: [number, number]
+}
+
 const PLANET_MARKER_DISCOVERY_CLEARANCE = 14
-export const SHIP_WORLD_SCALE = 0.03
 // Scale the chase rig with the ship so its screen-space composition stays unchanged.
 const SHIP_CAMERA_COMPOSITION_SCALE = SHIP_WORLD_SCALE / 0.06
 const CHASE_CAMERA_BACK_DISTANCE = 0.85 * SHIP_CAMERA_COMPOSITION_SCALE
@@ -38,12 +56,37 @@ const CHASE_CAMERA_HEIGHT = 0.22 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_LOOK_DISTANCE = 7 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_LOOK_HEIGHT = 0.05 * SHIP_CAMERA_COMPOSITION_SCALE
 
-function planetMarkerDiscoveryRadius(planetRadius: number): number {
-  return planetRadius + PLANET_MARKER_DISCOVERY_CLEARANCE
+function usesSoftwareRenderer(): boolean {
+  try {
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+    if (!context) return true
+    const rendererInfo = context.getExtension('WEBGL_debug_renderer_info')
+    const renderer = rendererInfo
+      ? String(context.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL))
+      : String(context.getParameter(context.RENDERER))
+    context.getExtension('WEBGL_lose_context')?.loseContext()
+    return /swiftshader|llvmpipe|software/i.test(renderer)
+  } catch {
+    return true
+  }
 }
 
-function hsl(hue: number, saturation: number, lightness: number) {
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
+function readVisualSettings(): VisualSettings {
+  const quality = selectVisualQuality({
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    devicePixelRatio: window.devicePixelRatio,
+    softwareRenderer: usesSoftwareRenderer(),
+  })
+  return {
+    quality,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    dpr: quality === 'normal' ? [1, Math.min(1.6, window.devicePixelRatio)] : [1, 1.15],
+  }
+}
+
+function planetMarkerDiscoveryRadius(planetRadius: number): number {
+  return planetRadius + PLANET_MARKER_DISCOVERY_CLEARANCE
 }
 
 function ChaseCamera({ flight }: { flight: FlightState }) {
@@ -80,151 +123,6 @@ function ChaseCamera({ flight }: { flight: FlightState }) {
   })
 
   return null
-}
-
-function ProceduralShip({
-  flight,
-  primaryHue,
-  accentHue,
-}: {
-  flight: FlightState
-  primaryHue: number
-  accentHue: number
-}) {
-  const engineIntensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
-  const trailLength = flight.turbo ? 7 : 2.5 + engineIntensity * 2.5
-
-  return (
-    <group
-      position={[flight.x, flight.altitude, flight.z]}
-      rotation={[0, flight.heading, 0]}
-      scale={SHIP_WORLD_SCALE}
-    >
-      <group rotation={[flight.pitch, 0, flight.bank]}>
-        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <coneGeometry args={[1.05, 4.2, 4]} />
-          <meshStandardMaterial
-            color={hsl(primaryHue, 72, 48)}
-            metalness={0.38}
-            roughness={0.42}
-            flatShading
-          />
-        </mesh>
-        <mesh position={[-1.65, -0.05, -0.55]} rotation={[0, -0.16, -0.08]} castShadow>
-          <boxGeometry args={[2.7, 0.16, 1.55]} />
-          <meshStandardMaterial
-            color={hsl(primaryHue, 62, 30)}
-            metalness={0.32}
-            roughness={0.5}
-            flatShading
-          />
-        </mesh>
-        <mesh position={[1.65, -0.05, -0.55]} rotation={[0, 0.16, 0.08]} castShadow>
-          <boxGeometry args={[2.7, 0.16, 1.55]} />
-          <meshStandardMaterial
-            color={hsl(primaryHue, 62, 30)}
-            metalness={0.32}
-            roughness={0.5}
-            flatShading
-          />
-        </mesh>
-        <mesh position={[0, 0.45, 0.4]}>
-          <octahedronGeometry args={[0.5, 0]} />
-          <meshStandardMaterial
-            color={hsl(accentHue, 100, 78)}
-            emissive={hsl(accentHue, 100, 50)}
-            emissiveIntensity={2.2}
-            flatShading
-          />
-        </mesh>
-        <pointLight
-          position={[0, 0.45, 0.5]}
-          color={hsl(accentHue, 100, 68)}
-          intensity={3}
-          distance={9}
-        />
-        <mesh
-          position={[0, 0, -2.2 - trailLength / 2]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          scale={[0.55 + engineIntensity * 0.3, trailLength, 0.55 + engineIntensity * 0.3]}
-        >
-          <coneGeometry args={[0.75, 1, 5]} />
-          <meshBasicMaterial
-            color={hsl(accentHue, 100, 68)}
-            transparent
-            opacity={0.35 + engineIntensity * 0.5}
-            depthWrite={false}
-          />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-function OrbitingPlanet({
-  planet,
-  simulationStartedAt,
-}: {
-  planet: PlanetDescriptor
-  simulationStartedAt: number
-}) {
-  const orbit = useRef<Group>(null)
-  const planetMesh = useRef<Group>(null)
-  const { appearance } = planet
-
-  useFrame(() => {
-    if (!orbit.current || !planetMesh.current) return
-    const elapsedSeconds = (performance.now() - simulationStartedAt) / 1_000
-    orbit.current.rotation.y = planetOrbitPhase(planet, elapsedSeconds)
-    planetMesh.current.rotation.y =
-      planet.initialRotation + elapsedSeconds * planet.rotationSpeed
-  })
-
-  return (
-    <>
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[planet.orbitRadius, 0.012, 3, 128]} />
-        <meshBasicMaterial color="#8790bd" transparent opacity={0.08} depthWrite={false} />
-      </mesh>
-      <group ref={orbit}>
-        <group ref={planetMesh} position={[planet.orbitRadius, 0, 0]}>
-          <mesh castShadow receiveShadow>
-            <icosahedronGeometry args={[planet.radius, 2]} />
-            <meshStandardMaterial
-              color={hsl(appearance.baseHue, appearance.saturation, appearance.lightness)}
-              emissive={hsl(appearance.accentHue, 70, 32)}
-              emissiveIntensity={appearance.luminosity * 0.22}
-              roughness={appearance.state === 'archived' ? 0.92 : 0.68}
-              flatShading
-            />
-          </mesh>
-          <mesh
-            position={[planet.radius * -0.28, planet.radius * 0.42, planet.radius * 0.76]}
-            scale={[1.25, 0.45, 0.7]}
-          >
-            <icosahedronGeometry args={[planet.radius * 0.36, 0]} />
-            <meshStandardMaterial
-              color={hsl(appearance.accentHue, 72, 68)}
-              transparent
-              opacity={appearance.state === 'archived' ? 0.18 : 0.58}
-              flatShading
-            />
-          </mesh>
-          {appearance.hasRing ? (
-            <mesh rotation={[Math.PI / 2.7, 0.25, 0]}>
-              <torusGeometry args={[planet.radius * 1.55, planet.radius * 0.07, 4, 48]} />
-              <meshStandardMaterial
-                color={hsl(appearance.ringHue, 85, 72)}
-                emissive={hsl(appearance.ringHue, 80, 42)}
-                emissiveIntensity={0.5}
-                flatShading
-              />
-            </mesh>
-          ) : null}
-        </group>
-      </group>
-    </>
-  )
 }
 
 function OrientationTracker({
@@ -333,11 +231,13 @@ function SystemScene({
   flight,
   simulationStartedAt,
   onMarkersChange,
+  settings,
 }: {
   system: GitHubSystem
   flight: FlightState
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
+  settings: VisualSettings
 }) {
   const { starAppearance, planets } = system
   const extent = Math.max(20, ...planets.map((planet) => planet.orbitRadius + planet.radius))
@@ -345,22 +245,32 @@ function SystemScene({
 
   return (
     <>
-      <ambientLight intensity={0.38} />
+      <color attach="background" args={['#030510']} />
+      <ambientLight intensity={0.24} color="#7181a8" />
+      <hemisphereLight args={['#8096c9', '#130d20', 0.34]} />
       <pointLight
-        color={hsl(starAppearance.coronaHue, 95, 68)}
-        intensity={18}
-        distance={extent * 2.4}
-        decay={1.35}
+        color={hsl(starAppearance.coronaHue, 92, 64)}
+        intensity={34 * starAppearance.luminosity}
+        distance={extent * 2.35}
+        decay={1.45}
       />
-      <mesh>
-        <icosahedronGeometry args={[4, 2]} />
-        <meshBasicMaterial color={hsl(starAppearance.primaryHue, 94, 64)} />
-      </mesh>
+      <SpaceBackground
+        seed={system.starSeed}
+        quality={settings.quality}
+        reducedMotion={settings.reducedMotion}
+        flight={flight}
+      />
+      <ProceduralStar
+        appearance={starAppearance}
+        quality={settings.quality}
+        reducedMotion={settings.reducedMotion}
+      />
       {planets.map((planet) => (
         <OrbitingPlanet
           key={planet.repository.id}
           planet={planet}
           simulationStartedAt={simulationStartedAt}
+          quality={settings.quality}
         />
       ))}
       <ProceduralShip
@@ -390,8 +300,9 @@ export function GalaxyScene({
   simulationStartedAt: number
   onMarkersChange: (markers: CelestialMarkerState[]) => void
 }) {
+  const [settings] = useState(readVisualSettings)
   const farPlane = Math.max(
-    160,
+    220,
     ...system.planets.map((planet) => (planet.orbitRadius + planet.radius) * 4),
   )
 
@@ -400,6 +311,12 @@ export function GalaxyScene({
       className="galaxy-canvas"
       role="img"
       aria-label="Escena tridimensional con cámara automática siguiendo la nave"
+      data-visual-quality={settings.quality}
+      data-reduced-motion={settings.reducedMotion}
+      data-visual-seed={system.starSeed}
+      data-star-count={settings.quality === 'normal' ? 960 : 240}
+      data-dust-count={settings.quality === 'normal' ? 120 : 32}
+      data-nebula-count={settings.quality === 'normal' ? 2 + (system.starSeed % 3) : 2}
     >
       <Canvas
         camera={{
@@ -408,17 +325,29 @@ export function GalaxyScene({
           near: 0.1,
           far: farPlane,
         }}
-        dpr={[1, 1.6]}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-        shadows
+        dpr={settings.dpr}
+        gl={{
+          antialias: settings.quality === 'normal',
+          alpha: false,
+          powerPreference: 'high-performance',
+        }}
+        shadows={settings.quality === 'normal'}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = SRGBColorSpace
+          gl.toneMapping = ACESFilmicToneMapping
+          gl.toneMappingExposure = 1.04
+        }}
       >
         <SystemScene
           system={system}
           flight={flight}
           simulationStartedAt={simulationStartedAt}
           onMarkersChange={onMarkersChange}
+          settings={settings}
         />
       </Canvas>
     </div>
   )
 }
+
+export { SHIP_WORLD_SCALE }

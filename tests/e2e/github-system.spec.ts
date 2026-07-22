@@ -106,7 +106,7 @@ test('reutiliza la caché durante quince minutos y refresca los datos al expirar
 
 test('representa una escena sembrada con biomas y estados procedurales distinguibles', async ({
   page,
-}) => {
+}, testInfo) => {
   await interceptGitHub(page, [
     { ...repository(1), language: 'TypeScript' },
     { ...repository(2), language: null },
@@ -137,6 +137,36 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
   const star = page.getByLabel('Estrella de stargazer')
   await expect(star).toHaveAttribute('data-primary-hue', '215')
   await expect(star).toHaveAttribute('data-language-families', 'typescript,javascript,python')
+
+  const scene = page.getByRole('img', {
+    name: 'Escena tridimensional con cámara automática siguiendo la nave',
+  })
+  const starSeed = await star.getAttribute('data-star-seed')
+  await expect(scene).toHaveAttribute('data-visual-seed', starSeed!)
+  await expect(scene).toHaveAttribute('data-visual-quality', /normal|reduced/)
+  await expect(scene).toHaveAttribute('data-star-count', /240|960/)
+  await expect(scene).toHaveAttribute('data-dust-count', /32|120/)
+  await expect(scene).toHaveAttribute('data-nebula-count', /[2-4]/)
+  await testInfo.attach('composicion-sembrada.png', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  })
+})
+
+test('reduce parpadeo, pulsaciones y partículas cuando el sistema solicita menos movimiento', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await interceptGitHub(page)
+
+  await page.goto('/?user=stargazer')
+
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+  await expect(
+    page.getByRole('img', {
+      name: 'Escena tridimensional con cámara automática siguiendo la nave',
+    }),
+  ).toHaveAttribute('data-reduced-motion', 'true')
 })
 
 test('carga y comparte desde el menú un sistema obtenido de todas las páginas de GitHub', async ({
