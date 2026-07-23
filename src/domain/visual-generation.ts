@@ -73,12 +73,62 @@ export interface SurfaceFormation {
   accentMix: number
 }
 
+export interface PlanetSurfaceDescriptor {
+  orientation: Vector3Tuple
+  regionScale: number
+  detailScale: number
+  detailOctaves: 1 | 2
+  regionThreshold: number
+  reliefAmplitude: number
+  forkNetworkStrength: number
+  secondaryTrait: PlanetSecondaryTrait
+}
+
 export interface PlanetSurfaceSample {
   direction: Vector3Tuple
   hue: number
   saturation: number
   lightness: number
   accentMix: number
+  regionMix: number
+  detailMix: number
+  elevation: number
+}
+
+export interface PlanetMetricSignals {
+  stars: number
+  forks: number
+  size: number
+  activity: number
+}
+
+export type PlanetSecondaryTrait =
+  | 'caps'
+  | 'canyons'
+  | 'crater-field'
+  | 'mineral-veins'
+  | 'night-lights'
+  | 'plates'
+  | 'storm-bands'
+
+export interface SurfacePatch {
+  direction: Vector3Tuple
+  scale: number
+  intensity: number
+}
+
+export interface DynamicLayerVisual {
+  kind: 'aurora' | 'clouds' | 'thermal-clouds'
+  opacity: number
+  rotationSpeed: number
+  patches: SurfacePatch[]
+}
+
+export interface EmissiveVisual {
+  kind: 'aurora' | 'lava' | 'lights' | 'mineral' | 'none'
+  hue: number
+  intensity: number
+  patches: SurfacePatch[]
 }
 
 export interface AtmosphereVisual {
@@ -89,11 +139,17 @@ export interface AtmosphereVisual {
 
 export interface PlanetVisual {
   radius: number
+  surface: PlanetSurfaceDescriptor
   surfaceSamples: PlanetSurfaceSample[]
   formations: SurfaceFormation[]
   atmosphere: AtmosphereVisual | null
   cloudLayer: boolean
+  dynamicLayer: DynamicLayerVisual | null
+  emissive: EmissiveVisual
   emissiveStrength: number
+  metricSignals: PlanetMetricSignals
+  forkNetworkStrength: number
+  secondaryTrait: PlanetSecondaryTrait
 }
 
 const UINT32_MAX = 0x1_0000_0000
@@ -273,48 +329,75 @@ export function generateSpaceVisual(seed: number, quality: VisualQuality): Space
   }
 }
 
-function fract(value: number): number {
-  return value - Math.floor(value)
+function seededAxis(seed: number, salt: number): Vector3Tuple {
+  const random = mulberry32(seed ^ Math.imul(salt + 1, 0x9e3779b9))
+  return randomDirection(random)
 }
 
-function spatialNoise(
+function dot(left: Vector3Tuple, right: Vector3Tuple): number {
+  return left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+}
+
+// Directional waves are continuous on the sphere, unlike UV noise: there is no
+// longitude seam and the poles receive the same sampling density as every face.
+function sphericalWave(
   seed: number,
-  [x, y, z]: Vector3Tuple,
+  direction: Vector3Tuple,
+  scale: number,
   salt: number,
 ): number {
-  return fract(
-    Math.sin(
-      x * 127.1 + y * 311.7 + z * 74.7 + (seed % 104_729) * 0.013 + salt * 19.19,
-    ) * 43_758.5453,
-  )
+  const first = seededAxis(seed, salt)
+  const second = seededAxis(seed, salt + 17)
+  const phase = deterministicUnit(seed, salt, 31) * FULL_TURN
+  const value =
+    Math.sin(dot(direction, first) * scale * Math.PI + phase) * 0.62 +
+    Math.cos(dot(direction, second) * scale * Math.PI * 0.73 - phase * 0.7) * 0.38
+  return clamp(value * 0.5 + 0.5)
+}
+
+function defaultSurfaceDescriptor(appearance: PlanetAppearance): PlanetSurfaceDescriptor {
+  return {
+    orientation: roundedVector(seededAxis(appearance.surfaceSeed, 3)),
+    regionScale: round(2.2 + deterministicUnit(appearance.surfaceSeed, 2) * 1.4),
+    detailScale: round(7 + deterministicUnit(appearance.surfaceSeed, 4) * 3),
+    detailOctaves: 2,
+    regionThreshold: round(0.38 + deterministicUnit(appearance.surfaceSeed, 6) * 0.2),
+    reliefAmplitude: 0.018,
+    forkNetworkStrength: 0,
+    secondaryTrait: selectSecondaryTrait(appearance),
+  }
 }
 
 function featureAccent(
   feature: PlanetSurfaceFeature,
   seed: number,
   direction: Vector3Tuple,
+  surface: PlanetSurfaceDescriptor,
 ): number {
   const [x, y, z] = direction
-  const noise = spatialNoise(seed, direction, 1)
+  const oriented = dot(direction, surface.orientation)
+  const primaryDetail = sphericalWave(seed, direction, surface.detailScale, 41)
+  const detail = surface.detailOctaves === 2
+    ? primaryDetail * 0.74 +
+      sphericalWave(seed, direction, surface.detailScale * 1.86, 47) * 0.26
+    : primaryDetail
 
   switch (feature) {
     case 'bands':
-      return clamp(0.5 + Math.sin((y * 6 + noise * 0.35) * Math.PI) * 0.5)
+      return clamp(0.5 + Math.sin((oriented * 5.2 + detail * 0.42) * Math.PI) * 0.5)
     case 'craters': {
-      const cell = spatialNoise(seed, direction, 4)
-      return cell > 0.72 ? clamp((cell - 0.72) * 3.57) : noise * 0.18
+      const cell = sphericalWave(seed, direction, surface.detailScale * 0.72, 53)
+      return cell > 0.7 ? clamp((cell - 0.7) / 0.3) : detail * 0.14
     }
     case 'dunes':
-      return clamp(0.5 + Math.sin((y * 8 + x * 2.4 + noise * 0.45) * Math.PI) * 0.5)
+      return clamp(0.5 + Math.sin((oriented * 7 + dot(direction, seededAxis(seed, 8)) * 2 + detail * 0.35) * Math.PI) * 0.5)
     case 'facets':
-      return clamp(noise * 0.82 + spatialNoise(seed, direction, 8) * 0.18)
+      return clamp(detail * 0.7 + sphericalWave(seed, direction, surface.detailScale * 0.55, 67) * 0.3)
     case 'islands':
-      return clamp(
-        (Math.sin(x * 5 + noise) + Math.cos(z * 4 - y * 2) + 1.05) / 3.05,
-      )
+      return clamp((sphericalWave(seed, direction, surface.regionScale * 1.3, 71) - 0.34) / 0.52)
     case 'ridges': {
-      const ridge = Math.abs(Math.sin(Math.atan2(z, x) * 5 + y * 8 + noise * 0.8))
-      return clamp(Math.pow(ridge, 5))
+      const ridge = Math.abs(Math.sin((x * 2.7 + y * 4.1 + z * 3.3 + detail * 0.6) * Math.PI))
+      return clamp(Math.pow(ridge, 4))
     }
   }
 }
@@ -322,24 +405,67 @@ function featureAccent(
 export function samplePlanetSurface(
   appearance: PlanetAppearance,
   direction: Vector3Tuple,
+  descriptor: PlanetSurfaceDescriptor = defaultSurfaceDescriptor(appearance),
 ): PlanetSurfaceSample {
   const normalizedDirection = normalize(direction)
-  const accentMix = featureAccent(
+  const broadNoise = sphericalWave(
+    appearance.surfaceSeed,
+    normalizedDirection,
+    descriptor.regionScale,
+    11,
+  )
+  const regionMix = clamp((broadNoise - descriptor.regionThreshold) / 0.28)
+  const featureMix = featureAccent(
     appearance.surfaceFeature,
     appearance.surfaceSeed,
     normalizedDirection,
+    descriptor,
   )
-  const variation = spatialNoise(appearance.surfaceSeed, normalizedDirection, 12) - 0.5
-  const hueDelta = appearance.accentHue - appearance.baseHue
-  const shortestHueDelta = ((hueDelta + 540) % 360) - 180
+  const vein = Math.pow(Math.abs(Math.sin(
+    (dot(normalizedDirection, seededAxis(appearance.surfaceSeed, 91)) * 5.4 +
+      dot(normalizedDirection, seededAxis(appearance.surfaceSeed, 97)) * 3.1) * Math.PI,
+  )), 9) * descriptor.forkNetworkStrength
+  const traitWave = sphericalWave(
+    appearance.surfaceSeed,
+    normalizedDirection,
+    descriptor.detailScale * 0.64,
+    109,
+  )
+  const traitMix = descriptor.secondaryTrait === 'caps'
+    ? clamp((Math.abs(dot(normalizedDirection, descriptor.orientation)) - 0.58) / 0.3)
+    : descriptor.secondaryTrait === 'canyons'
+      ? 1 - Math.pow(Math.abs(traitWave * 2 - 1), 0.28)
+      : descriptor.secondaryTrait === 'crater-field'
+        ? traitWave > 0.76 ? (traitWave - 0.76) / 0.24 : 0
+        : descriptor.secondaryTrait === 'mineral-veins'
+          ? Math.pow(Math.abs(Math.sin(traitWave * Math.PI * 3)), 8)
+          : descriptor.secondaryTrait === 'plates'
+            ? Math.round(traitWave * 4) / 4
+            : descriptor.secondaryTrait === 'storm-bands'
+              ? 0.5 + Math.sin(
+                  dot(normalizedDirection, descriptor.orientation) * Math.PI * 9,
+                ) * 0.5
+              : traitWave
+  const detailMix = clamp(
+    featureMix * (0.82 - descriptor.forkNetworkStrength * 0.2) +
+    traitMix * 0.18 +
+    vein,
+  )
+  const accentMix = clamp(regionMix * 0.72 + detailMix * 0.28)
+  const hueDelta = ((appearance.accentHue - appearance.baseHue + 540) % 360) - 180
   const archivedFactor = appearance.state === 'archived' ? 0.34 : 1
+  const reliefShape = clamp(regionMix * 0.68 + detailMix * 0.32)
+  const elevation = (reliefShape * 2 - 1) * descriptor.reliefAmplitude
 
   return {
     direction: roundedVector(normalizedDirection),
-    hue: round(wrappedHue(appearance.baseHue + shortestHueDelta * accentMix * 0.72)),
-    saturation: round(clamp((appearance.saturation + variation * 16) / 100) * 100 * archivedFactor),
-    lightness: round(clamp((appearance.lightness + variation * 18 + accentMix * 9) / 100) * 100),
+    hue: round(wrappedHue(appearance.baseHue + hueDelta * accentMix * 0.76)),
+    saturation: round(clamp((appearance.saturation + (detailMix - 0.5) * 14) / 100) * 100 * archivedFactor),
+    lightness: round(clamp((appearance.lightness + (regionMix - 0.5) * 16 + detailMix * 7) / 100) * 100),
     accentMix: round(accentMix),
+    regionMix: round(regionMix),
+    detailMix: round(detailMix),
+    elevation: round(elevation),
   }
 }
 
@@ -382,25 +508,195 @@ function formationScale(
   }
 }
 
+function boundedLog(value: number, reference: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0
+  return round(clamp(Math.log1p(value) / Math.log1p(reference)))
+}
+
+function metricSignals(planet: PlanetDescriptor): PlanetMetricSignals {
+  const timestamp = Date.parse(planet.repository.updated_at)
+  const start = Date.UTC(2008, 0, 1)
+  const end = Date.UTC(2030, 0, 1)
+  return {
+    stars: boundedLog(planet.repository.stargazers_count, 1_000),
+    forks: boundedLog(planet.repository.forks_count, 120),
+    size: boundedLog(planet.repository.size, 900_000),
+    activity: Number.isFinite(timestamp) ? round(clamp((timestamp - start) / (end - start))) : 0,
+  }
+}
+
+function surfaceDescriptor(
+  planet: PlanetDescriptor,
+  quality: VisualQuality,
+  signals: PlanetMetricSignals,
+): PlanetSurfaceDescriptor {
+  const { appearance } = planet
+  const reliefByFeature: Record<PlanetSurfaceFeature, number> = {
+    bands: 0.012,
+    craters: 0.022,
+    dunes: 0.018,
+    facets: 0.028,
+    islands: 0.02,
+    ridges: 0.032,
+  }
+  return {
+    orientation: roundedVector(seededAxis(appearance.surfaceSeed, 3)),
+    regionScale: round(1.4 + deterministicUnit(appearance.surfaceSeed, 2) * 2.2 + signals.size * 1.2),
+    detailScale: round(6.2 + deterministicUnit(appearance.surfaceSeed, 4) * 4 + signals.size * 2.2),
+    detailOctaves: quality === 'normal' ? 2 : 1,
+    regionThreshold: round(0.34 + deterministicUnit(appearance.surfaceSeed, 6) * 0.24),
+    reliefAmplitude: round(Math.min(0.04, reliefByFeature[appearance.surfaceFeature] + signals.size * 0.006)),
+    forkNetworkStrength: planet.repository.forks_count <= 0 ? 0 : round(signals.forks * 0.8),
+    secondaryTrait: selectSecondaryTrait(appearance),
+  }
+}
+
+const traitsByBiome: Record<PlanetAppearance['biome'], PlanetSecondaryTrait[]> = {
+  aurora: ['storm-bands', 'caps', 'night-lights'],
+  crystalline: ['mineral-veins', 'plates', 'caps'],
+  desert: ['canyons', 'plates', 'crater-field'],
+  oceanic: ['caps', 'storm-bands', 'night-lights'],
+  verdant: ['night-lights', 'storm-bands', 'caps'],
+  volcanic: ['canyons', 'plates', 'crater-field'],
+  rocky: ['crater-field', 'mineral-veins', 'canyons'],
+  dead: ['crater-field', 'canyons', 'plates'],
+}
+
+function selectSecondaryTrait(appearance: PlanetAppearance): PlanetSecondaryTrait {
+  const traits = traitsByBiome[appearance.biome]
+  return traits[appearance.surfaceSeed % traits.length]
+}
+
 function generateFormations(
   planet: PlanetDescriptor,
   quality: VisualQuality,
+  surface: PlanetSurfaceDescriptor,
+  signals: PlanetMetricSignals,
 ): SurfaceFormation[] {
   const { appearance, radius } = planet
-  const count = quality === 'normal' ? 10 + (appearance.surfaceSeed % 7) : 5 + (appearance.surfaceSeed % 4)
+  const normalCount = Math.min(18, 9 + Math.floor(signals.size * 4) + (appearance.surfaceSeed % 5))
+  const count = quality === 'normal' ? normalCount : Math.max(4, Math.floor(normalCount * 0.48))
   const random = mulberry32(appearance.surfaceSeed ^ 0x9e3779b9)
 
   return Array.from({ length: count }, () => {
-    const direction = randomDirection(random)
-    const accentMix = featureAccent(appearance.surfaceFeature, appearance.surfaceSeed, direction)
-    const lift = appearance.surfaceFeature === 'craters' ? 0.992 : 1.015
+    // Pick the most coherent candidate instead of sticking an object at the
+    // first random point. Formations therefore collect along their regions.
+    let direction = randomDirection(random)
+    let surfaceSample = samplePlanetSurface(appearance, direction, surface)
+    let accentMix = surfaceSample.accentMix
+    for (let candidateIndex = 0; candidateIndex < 3; candidateIndex += 1) {
+      const candidate = randomDirection(random)
+      const candidateSample = samplePlanetSurface(appearance, candidate, surface)
+      if (candidateSample.accentMix > accentMix) {
+        direction = candidate
+        surfaceSample = candidateSample
+        accentMix = candidateSample.accentMix
+      }
+    }
+    const inset = appearance.surfaceFeature === 'craters' ? -0.008 : Math.max(0.004, surfaceSample.elevation * 0.55)
     return {
       kind: formationKindByFeature[appearance.surfaceFeature],
-      position: roundedVector(scaleVector(direction, radius * lift)),
+      position: roundedVector(scaleVector(direction, radius * (1 + inset))),
       scale: formationScale(appearance.surfaceFeature, radius, random),
       accentMix: round(accentMix),
     }
   })
+}
+
+function generatePatches(seed: number, count: number, salt: number): SurfacePatch[] {
+  const random = mulberry32(seed ^ salt)
+  return Array.from({ length: count }, () => ({
+    direction: roundedVector(randomDirection(random)),
+    scale: round(range(random, 0.08, 0.22)),
+    intensity: round(range(random, 0.42, 1)),
+  }))
+}
+
+function generateSurfacePatches(
+  appearance: PlanetAppearance,
+  surface: PlanetSurfaceDescriptor,
+  count: number,
+  salt: number,
+): SurfacePatch[] {
+  const random = mulberry32(appearance.surfaceSeed ^ salt)
+  return Array.from({ length: count }, () => {
+    let direction = randomDirection(random)
+    let intensity = samplePlanetSurface(appearance, direction, surface).accentMix
+    for (let candidateIndex = 0; candidateIndex < 3; candidateIndex += 1) {
+      const candidate = randomDirection(random)
+      const candidateIntensity = samplePlanetSurface(appearance, candidate, surface).accentMix
+      if (candidateIntensity > intensity) {
+        direction = candidate
+        intensity = candidateIntensity
+      }
+    }
+    return {
+      direction: roundedVector(direction),
+      scale: round(range(random, 0.08, 0.18)),
+      intensity: round(0.42 + intensity * 0.58),
+    }
+  })
+}
+
+function dynamicLayer(
+  planet: PlanetDescriptor,
+  quality: VisualQuality,
+  signals: PlanetMetricSignals,
+): DynamicLayerVisual | null {
+  const { appearance } = planet
+  if (appearance.state !== 'active') return null
+  const seeded = deterministicUnit(appearance.surfaceSeed, 21)
+  let kind: DynamicLayerVisual['kind'] | null = null
+  if (appearance.biome === 'aurora') kind = 'aurora'
+  else if (appearance.biome === 'volcanic' && (signals.activity > 0.7 || seeded > 0.62)) kind = 'thermal-clouds'
+  else if (['oceanic', 'verdant'].includes(appearance.biome) && seeded > 0.28) kind = 'clouds'
+  if (!kind) return null
+
+  const normalCount = 7 + Math.floor(signals.activity * 5)
+  return {
+    kind,
+    opacity: round(Math.min(0.24, 0.09 + signals.activity * 0.1)),
+    rotationSpeed: round(0.006 + signals.activity * 0.012),
+    patches: generatePatches(
+      appearance.surfaceSeed,
+      quality === 'normal' ? normalCount : Math.max(2, Math.floor(normalCount * 0.42)),
+      0x4c11db7,
+    ),
+  }
+}
+
+function emissiveVisual(
+  planet: PlanetDescriptor,
+  quality: VisualQuality,
+  signals: PlanetMetricSignals,
+  surface: PlanetSurfaceDescriptor,
+): EmissiveVisual {
+  const { appearance } = planet
+  if (appearance.state !== 'active') {
+    return { kind: 'none', hue: appearance.accentHue, intensity: 0, patches: [] }
+  }
+  const kind: EmissiveVisual['kind'] = appearance.biome === 'volcanic'
+    ? 'lava'
+    : appearance.biome === 'aurora'
+      ? 'aurora'
+      : appearance.biome === 'crystalline'
+        ? 'mineral'
+        : signals.stars >= 0.28
+          ? 'lights'
+          : 'none'
+  if (kind === 'none') return { kind, hue: appearance.accentHue, intensity: 0, patches: [] }
+  const normalCount = 3 + Math.floor(signals.stars * 7 + signals.forks * 3)
+  return {
+    kind,
+    hue: appearance.accentHue,
+    intensity: round(Math.min(0.65, 0.16 + signals.stars * 0.3 + signals.activity * 0.14)),
+    patches: generateSurfacePatches(
+      appearance,
+      surface,
+      quality === 'normal' ? normalCount : Math.max(2, Math.floor(normalCount * 0.5)),
+      0x2c9277b5,
+    ),
+  }
 }
 
 export function generatePlanetVisual(
@@ -408,28 +704,35 @@ export function generatePlanetVisual(
   quality: VisualQuality,
 ): PlanetVisual {
   const { appearance, radius } = planet
+  const signals = metricSignals(planet)
+  const surface = surfaceDescriptor(planet, quality, signals)
+  const layer = dynamicLayer(planet, quality, signals)
+  const emissive = emissiveVisual(planet, quality, signals, surface)
   const atmosphere = appearance.state === 'active'
     ? {
         hue: appearance.biome === 'volcanic' ? appearance.accentHue : wrappedHue(appearance.baseHue + 18),
-        opacity: round(0.1 + appearance.luminosity * 0.06),
-        scale: round(1.045 + appearance.luminosity * 0.012),
+        opacity: round(Math.min(0.2, 0.1 + signals.activity * 0.07)),
+        scale: round(1.045 + signals.activity * 0.012),
       }
     : null
   return {
     radius,
+    surface,
     surfaceSamples: Array.from({ length: 80 }, (_, index) =>
-      samplePlanetSurface(appearance, fibonacciDirection(index, 80)),
+      samplePlanetSurface(appearance, fibonacciDirection(index, 80), surface),
     ),
-    formations: generateFormations(planet, quality),
+    formations: generateFormations(planet, quality, surface, signals),
     atmosphere,
-    cloudLayer:
-      appearance.state === 'active' &&
-      ['aurora', 'oceanic', 'verdant'].includes(appearance.biome),
-    emissiveStrength:
-      appearance.state === 'archived'
-        ? 0.04
-        : appearance.state === 'neutral'
-          ? 0.06
-          : round(appearance.luminosity * (appearance.biome === 'volcanic' ? 0.38 : 0.15)),
+    cloudLayer: layer?.kind === 'clouds',
+    dynamicLayer: layer,
+    emissive,
+    emissiveStrength: appearance.state === 'archived'
+      ? 0.04
+      : appearance.state === 'neutral'
+        ? 0.06
+        : round(Math.min(0.36, 0.06 + emissive.intensity * 0.34)),
+    metricSignals: signals,
+    forkNetworkStrength: surface.forkNetworkStrength,
+    secondaryTrait: surface.secondaryTrait,
   }
 }

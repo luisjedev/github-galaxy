@@ -319,6 +319,9 @@ function Planet({ planet }: { planet: PlanetDescriptor }) {
         data-language-family={appearance.languageFamily ?? 'none'}
         data-size-state={repository.size === 0 ? 'empty' : 'populated'}
         data-surface-feature={appearance.surfaceFeature}
+        data-surface-seed={appearance.surfaceSeed}
+        data-stars={repository.stargazers_count}
+        data-forks={repository.forks_count}
         data-template={appearance.hasRing}
       >
         {appearance.hasRing ? <span className="planet-ring" /> : null}

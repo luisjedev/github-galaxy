@@ -35,12 +35,30 @@ import {
 function createPlanetGeometry(
   planet: PlanetDescriptor,
   quality: VisualQuality,
+  visual: PlanetVisual,
 ): BufferGeometry {
   const source = new IcosahedronGeometry(planet.radius, quality === 'normal' ? 2 : 1)
   const geometry = source.index ? source.toNonIndexed() : source
   const positions = geometry.getAttribute('position')
   const colors = new Float32Array(positions.count * 3)
   const center = new Vector3()
+
+  for (let index = 0; index < positions.count; index += 1) {
+    center.set(positions.getX(index), positions.getY(index), positions.getZ(index)).normalize()
+    const sample = samplePlanetSurface(
+      planet.appearance,
+      [center.x, center.y, center.z],
+      visual.surface,
+    )
+    const displacedRadius = planet.radius * (1 + sample.elevation)
+    positions.setXYZ(
+      index,
+      center.x * displacedRadius,
+      center.y * displacedRadius,
+      center.z * displacedRadius,
+    )
+  }
+  positions.needsUpdate = true
 
   for (let face = 0; face < positions.count / 3; face += 1) {
     center.set(0, 0, 0)
@@ -51,7 +69,11 @@ function createPlanetGeometry(
       center.z += positions.getZ(index)
     }
     center.normalize()
-    const sample = samplePlanetSurface(planet.appearance, [center.x, center.y, center.z])
+    const sample = samplePlanetSurface(
+      planet.appearance,
+      [center.x, center.y, center.z],
+      visual.surface,
+    )
     const color = colorFromHsl(sample.hue, sample.saturation / 100, sample.lightness / 100)
     for (let vertex = 0; vertex < 3; vertex += 1) {
       colors.set([color.r, color.g, color.b], (face * 3 + vertex) * 3)
@@ -59,6 +81,8 @@ function createPlanetGeometry(
   }
 
   geometry.setAttribute('color', new BufferAttribute(colors, 3))
+  geometry.computeVertexNormals()
+  geometry.computeBoundingSphere()
   if (geometry !== source) source.dispose()
   return geometry
 }
@@ -130,6 +154,93 @@ function SurfaceFormations({
   )
 }
 
+function SurfacePatches({
+  planet,
+  visual,
+  kind,
+}: {
+  planet: PlanetDescriptor
+  visual: PlanetVisual
+  kind: 'dynamic' | 'emissive'
+}) {
+  const mesh = useRef<InstancedMesh>(null)
+  const patches = useMemo(
+    () => kind === 'dynamic'
+      ? visual.dynamicLayer?.patches ?? []
+      : visual.emissive.patches,
+    [kind, visual.dynamicLayer, visual.emissive.patches],
+  )
+
+  useLayoutEffect(() => {
+    if (!mesh.current) return
+    const helper = new Object3D()
+    const normal = new Vector3()
+    const up = new Vector3(0, 1, 0)
+    for (let index = 0; index < patches.length; index += 1) {
+      const patch = patches[index]
+      normal.set(...patch.direction).normalize()
+      helper.position.copy(normal).multiplyScalar(
+        planet.radius * (kind === 'dynamic' ? 1.024 : 1.036),
+      )
+      helper.quaternion.setFromUnitVectors(up, normal)
+      helper.rotateY(index * 2.399)
+      helper.scale.set(
+        planet.radius * patch.scale,
+        planet.radius * (kind === 'dynamic' ? 0.008 : 0.014),
+        planet.radius * patch.scale * (0.55 + patch.intensity * 0.3),
+      )
+      helper.updateMatrix()
+      mesh.current.setMatrixAt(index, helper.matrix)
+    }
+    mesh.current.instanceMatrix.needsUpdate = true
+  }, [kind, patches, planet.radius])
+
+  if (patches.length === 0) return null
+  const hue = kind === 'dynamic'
+    ? visual.dynamicLayer?.kind === 'clouds' ? 205 : planet.appearance.accentHue
+    : visual.emissive.hue
+  const opacity = kind === 'dynamic' ? visual.dynamicLayer?.opacity ?? 0 : 0.72
+
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, patches.length]} renderOrder={1}>
+      <dodecahedronGeometry args={[1, 0]} />
+      <meshBasicMaterial
+        color={hsl(hue, kind === 'dynamic' ? 62 : 92, kind === 'dynamic' ? 82 : 62)}
+        transparent
+        opacity={opacity}
+        depthWrite={false}
+        blending={kind === 'emissive' ? AdditiveBlending : undefined}
+      />
+    </instancedMesh>
+  )
+}
+
+function IndependentDynamicLayer({
+  planet,
+  visual,
+  simulationElapsedSeconds,
+  reducedMotion,
+}: {
+  planet: PlanetDescriptor
+  visual: PlanetVisual
+  simulationElapsedSeconds: RefObject<number>
+  reducedMotion: boolean
+}) {
+  const layer = useRef<Group>(null)
+  useFrame(() => {
+    if (!layer.current || !visual.dynamicLayer || reducedMotion) return
+    layer.current.rotation.y =
+      planet.initialRotation * -0.43 +
+      simulationElapsedSeconds.current * visual.dynamicLayer.rotationSpeed
+  })
+  if (!visual.dynamicLayer) return null
+  return (
+    <group ref={layer} rotation={[0, planet.initialRotation * -0.43, 0]}>
+      <SurfacePatches planet={planet} visual={visual} kind="dynamic" />
+    </group>
+  )
+}
+
 function PlanetAtmosphere({ planet, visual }: { planet: PlanetDescriptor; visual: PlanetVisual }) {
   const atmosphere = visual.atmosphere
   const material = useMemo(() => {
@@ -163,16 +274,21 @@ export function OrbitingPlanet({
   simulationElapsedSeconds,
   quality,
   orbitalVisual,
+  reducedMotion,
 }: {
   planet: PlanetDescriptor
   simulationElapsedSeconds: RefObject<number>
   quality: VisualQuality
   orbitalVisual: PlanetOrbitalVisual
+  reducedMotion: boolean
 }) {
   const orbit = useRef<Group>(null)
   const planetSurface = useRef<Group>(null)
   const visual = useMemo(() => generatePlanetVisual(planet, quality), [planet, quality])
-  const geometry = useMemo(() => createPlanetGeometry(planet, quality), [planet, quality])
+  const geometry = useMemo(
+    () => createPlanetGeometry(planet, quality, visual),
+    [planet, quality, visual],
+  )
 
   useEffect(() => () => geometry.dispose(), [geometry])
   useFrame(() => {
@@ -202,22 +318,15 @@ export function OrbitingPlanet({
               />
             </mesh>
             <SurfaceFormations planet={planet} visual={visual} />
-            {visual.cloudLayer ? (
-              <mesh scale={1.022}>
-                <icosahedronGeometry args={[planet.radius, 2]} />
-                <meshStandardMaterial
-                  color={hsl(planet.appearance.accentHue, 48, 88)}
-                  emissive={hsl(planet.appearance.accentHue, 60, 46)}
-                  emissiveIntensity={0.16}
-                  transparent
-                  opacity={0.1}
-                  depthWrite={false}
-                  wireframe
-                />
-              </mesh>
-            ) : null}
+            <SurfacePatches planet={planet} visual={visual} kind="emissive" />
             <PlanetAtmosphere planet={planet} visual={visual} />
           </group>
+          <IndependentDynamicLayer
+            planet={planet}
+            visual={visual}
+            simulationElapsedSeconds={simulationElapsedSeconds}
+            reducedMotion={reducedMotion}
+          />
           <PlanetaryCompanions planet={planet} visual={orbitalVisual} quality={quality} />
         </group>
       </group>

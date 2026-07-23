@@ -126,6 +126,9 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
 
   await expect(normal).toHaveAttribute('data-biome', 'crystalline')
   await expect(normal).toHaveAttribute('data-surface-feature', 'facets')
+  await expect(normal).toHaveAttribute('data-surface-seed', /\d+/)
+  await expect(normal).toHaveAttribute('data-stars', '1')
+  await expect(normal).toHaveAttribute('data-forks', '0')
   await expect(neutral).toHaveAttribute('data-appearance-state', 'neutral')
   await expect(neutral).toHaveAttribute('data-biome', 'rocky')
   await expect(archived).toHaveAttribute('data-appearance-state', 'archived')
@@ -133,6 +136,9 @@ test('representa una escena sembrada con biomas y estados procedurales distingui
   await expect(empty).toHaveAttribute('data-size-state', 'empty')
   await expect(template).toHaveAttribute('data-template', 'true')
   await expect(template.locator('.planet-ring')).toHaveCount(1)
+  expect(await normal.getAttribute('data-surface-seed')).not.toBe(
+    await template.getAttribute('data-surface-seed'),
+  )
 
   const star = page.getByLabel('Estrella de stargazer')
   await expect(star).toHaveAttribute('data-primary-hue', '38')

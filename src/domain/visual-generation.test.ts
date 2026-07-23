@@ -8,6 +8,7 @@ import {
 import {
   generatePlanetVisual,
   generateSpaceVisual,
+  samplePlanetSurface,
   selectVisualQuality,
 } from './visual-generation'
 
@@ -179,6 +180,116 @@ describe('generación visual procedural', () => {
     expect(signatures.size).toBe(6)
   })
 
+  test('deriva regiones, relieve y capas deterministas de semilla, bioma y métricas', () => {
+    const input = repository(7, {
+      language: 'Rust',
+      stargazers_count: 1_000,
+      forks_count: 120,
+      size: 900_000,
+      updated_at: '2026-06-01T00:00:00Z',
+    })
+    const planet = createGitHubSystem(profile, [input]).planets[0]
+    const first = generatePlanetVisual(planet, 'normal')
+    const second = generatePlanetVisual(planet, 'normal')
+
+    expect(second).toEqual(first)
+    expect(first.surface.regionScale).toBeGreaterThanOrEqual(1.4)
+    expect(first.surface.regionScale).toBeLessThanOrEqual(4.8)
+    expect(first.surface.detailScale).toBeGreaterThan(first.surface.regionScale)
+    expect(first.surface.reliefAmplitude).toBeGreaterThan(0)
+    expect(first.surface.reliefAmplitude).toBeLessThanOrEqual(0.04)
+    expect(Math.hypot(...first.surface.orientation)).toBeCloseTo(1, 5)
+    expect(first.metricSignals).toMatchObject({ stars: 1, forks: 1, size: expect.any(Number) })
+    expect(first.dynamicLayer?.kind).toBe('thermal-clouds')
+    expect(first.emissive.kind).toBe('lava')
+    expect(first.emissive.patches.length).toBeGreaterThan(0)
+    expectFiniteTree(first)
+
+    for (const sample of first.surfaceSamples) {
+      expect(sample.regionMix).toBeGreaterThanOrEqual(0)
+      expect(sample.regionMix).toBeLessThanOrEqual(1)
+      expect(sample.detailMix).toBeGreaterThanOrEqual(0)
+      expect(sample.detailMix).toBeLessThanOrEqual(1)
+      expect(sample.elevation).toBeGreaterThanOrEqual(-first.surface.reliefAmplitude)
+      expect(sample.elevation).toBeLessThanOrEqual(first.surface.reliefAmplitude)
+    }
+  })
+
+  test('diferencia repositorios del mismo lenguaje sin perder su vocabulario visual', () => {
+    const planets = createGitHubSystem(profile, [
+      repository(11, { language: 'TypeScript', forks_count: 0 }),
+      repository(12, { language: 'TypeScript', forks_count: 24 }),
+      repository(13, { language: 'TypeScript', forks_count: 300 }),
+    ]).planets
+    const visuals = planets.map((planet) => generatePlanetVisual(planet, 'normal'))
+    const visualByRepositoryId = new Map(
+      planets.map((planet, index) => [planet.repository.id, visuals[index]]),
+    )
+
+    expect(new Set(planets.map((planet) => planet.appearance.biome))).toEqual(
+      new Set(['crystalline']),
+    )
+    expect(new Set(visuals.map((visual) => JSON.stringify(visual.surface))).size).toBe(3)
+    expect(new Set(visuals.map((visual) => visual.secondaryTrait)).size).toBeGreaterThan(1)
+    expect(visualByRepositoryId.get(11)?.metricSignals.forks).toBe(0)
+    expect(visualByRepositoryId.get(11)?.forkNetworkStrength).toBe(0)
+    expect(visualByRepositoryId.get(12)?.forkNetworkStrength).toBeGreaterThan(0)
+  })
+
+  test('conserva regiones principales y reduce detalle, formaciones y capas dinámicas', () => {
+    const planet = createGitHubSystem(profile, [repository(18, {
+      language: 'Shell',
+      stargazers_count: 50,
+      forks_count: 8,
+      size: 80_000,
+    })]).planets[0]
+    const normal = generatePlanetVisual(planet, 'normal')
+    const reduced = generatePlanetVisual(planet, 'reduced')
+
+    expect(reduced.surface.regionScale).toBe(normal.surface.regionScale)
+    expect(reduced.surface.orientation).toEqual(normal.surface.orientation)
+    expect(reduced.surface.detailOctaves).toBeLessThan(normal.surface.detailOctaves)
+    expect(reduced.formations.length).toBeLessThan(normal.formations.length)
+    expect(reduced.dynamicLayer?.patches.length).toBeLessThan(normal.dynamicLayer?.patches.length ?? 0)
+    expect(reduced.emissive.patches.length).toBeLessThanOrEqual(normal.emissive.patches.length)
+  })
+
+  test('cubre todos los biomas, extremos y muestras esféricas sin valores fuera de límites', () => {
+    const cases: Array<Partial<GitHubRepository>> = [
+      { language: 'CSS' },
+      { language: 'TypeScript' },
+      { language: 'JavaScript' },
+      { language: 'Python' },
+      { language: 'Shell' },
+      { language: 'Rust' },
+      { language: null, size: 0 },
+      { language: 'Go', archived: true, stargazers_count: Number.MAX_SAFE_INTEGER,
+        forks_count: Number.MAX_SAFE_INTEGER, size: Number.MAX_SAFE_INTEGER },
+    ]
+    const planets = createGitHubSystem(
+      profile,
+      cases.map((overrides, index) => repository(30 + index, overrides)),
+    ).planets
+
+    expect(new Set(planets.map((planet) => planet.appearance.biome))).toEqual(new Set([
+      'aurora', 'crystalline', 'desert', 'oceanic', 'verdant', 'volcanic', 'rocky', 'dead',
+    ]))
+    for (const planet of planets) {
+      const visual = generatePlanetVisual(planet, 'normal')
+      const poles = [
+        samplePlanetSurface(planet.appearance, [0, 1, 0], visual.surface),
+        samplePlanetSurface(planet.appearance, [0, -1, 0], visual.surface),
+      ]
+      expectFiniteTree(visual)
+      expectFiniteTree(poles)
+      expect(visual.formations.length).toBeLessThanOrEqual(18)
+      expect(visual.dynamicLayer?.opacity ?? 0).toBeLessThanOrEqual(0.24)
+      expect(visual.dynamicLayer?.rotationSpeed ?? 0).toBeLessThanOrEqual(0.025)
+      expect(visual.emissive.intensity).toBeLessThanOrEqual(0.65)
+      expect(visual.surface.reliefAmplitude).toBeLessThanOrEqual(0.04)
+    }
+  })
+
   test('respeta estados archivado, neutral y vacío en el acabado visual', () => {
     const system = createGitHubSystem(profile, [
       repository(1, { archived: true, language: 'Python' }),
@@ -189,9 +300,14 @@ describe('generación visual procedural', () => {
       system.planets.map((planet) => [planet.repository.id, generatePlanetVisual(planet, 'normal')]),
     )
 
-    expect(byId.get(1)).toMatchObject({ atmosphere: null, cloudLayer: false })
+    expect(byId.get(1)).toMatchObject({
+      atmosphere: null,
+      cloudLayer: false,
+      dynamicLayer: null,
+      emissive: { kind: 'none', intensity: 0, patches: [] },
+    })
     expect(byId.get(1)?.emissiveStrength).toBeLessThan(0.1)
-    expect(byId.get(2)).toMatchObject({ atmosphere: null })
+    expect(byId.get(2)).toMatchObject({ atmosphere: null, dynamicLayer: null })
     expect(byId.get(3)?.radius).toBe(0.7)
   })
 })

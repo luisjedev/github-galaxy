@@ -254,6 +254,7 @@ function SystemScene({
           planet={planet}
           simulationElapsedSeconds={simulationElapsedSeconds}
           quality={settings.quality}
+          reducedMotion={settings.reducedMotion}
           orbitalVisual={orbitalVisual.planets.find(
             (entry) => entry.repositoryId === planet.repository.id,
           )!.visual}
