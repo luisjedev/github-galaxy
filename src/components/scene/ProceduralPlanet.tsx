@@ -299,37 +299,39 @@ export function OrbitingPlanet({
   })
 
   return (
-    <>
-      <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
-        <torusGeometry args={[planet.orbitRadius, 0.012, 3, 128]} />
-        <meshBasicMaterial color="#9aa6d6" transparent opacity={0.11} depthWrite={false} />
-      </mesh>
-      <group ref={orbit}>
-        <group position={[planet.orbitRadius, 0, 0]}>
-          <group ref={planetSurface}>
-            <mesh geometry={geometry} castShadow receiveShadow>
-              <meshStandardMaterial
-                vertexColors
-                emissive={hsl(planet.appearance.accentHue, 68, 26)}
-                emissiveIntensity={visual.emissiveStrength}
-                roughness={planet.appearance.state === 'archived' ? 0.96 : 0.7}
-                metalness={planet.appearance.surfaceFeature === 'facets' ? 0.18 : 0.02}
-                flatShading
-              />
-            </mesh>
-            <SurfaceFormations planet={planet} visual={visual} />
-            <SurfacePatches planet={planet} visual={visual} kind="emissive" />
-            <PlanetAtmosphere planet={planet} visual={visual} />
+    <group rotation={[0, planet.orbitAscendingNode, 0]}>
+      <group rotation={[planet.orbitInclination, 0, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} renderOrder={-1}>
+          <torusGeometry args={[planet.orbitRadius, 0.008, 3, 128]} />
+          <meshBasicMaterial color="#9aa6d6" transparent opacity={0.075} depthWrite={false} />
+        </mesh>
+        <group ref={orbit}>
+          <group position={[planet.orbitRadius, 0, 0]}>
+            <group ref={planetSurface}>
+              <mesh geometry={geometry} castShadow receiveShadow>
+                <meshStandardMaterial
+                  vertexColors
+                  emissive={hsl(planet.appearance.accentHue, 68, 26)}
+                  emissiveIntensity={visual.emissiveStrength}
+                  roughness={planet.appearance.state === 'archived' ? 0.96 : 0.7}
+                  metalness={planet.appearance.surfaceFeature === 'facets' ? 0.18 : 0.02}
+                  flatShading
+                />
+              </mesh>
+              <SurfaceFormations planet={planet} visual={visual} />
+              <SurfacePatches planet={planet} visual={visual} kind="emissive" />
+              <PlanetAtmosphere planet={planet} visual={visual} />
+            </group>
+            <IndependentDynamicLayer
+              planet={planet}
+              visual={visual}
+              simulationElapsedSeconds={simulationElapsedSeconds}
+              reducedMotion={reducedMotion}
+            />
+            <PlanetaryCompanions planet={planet} visual={orbitalVisual} quality={quality} />
           </group>
-          <IndependentDynamicLayer
-            planet={planet}
-            visual={visual}
-            simulationElapsedSeconds={simulationElapsedSeconds}
-            reducedMotion={reducedMotion}
-          />
-          <PlanetaryCompanions planet={planet} visual={orbitalVisual} quality={quality} />
         </group>
       </group>
-    </>
+    </group>
   )
 }

@@ -1,4 +1,4 @@
-import type { GitHubSystem } from './github-system'
+import { planetPositionAt, type GitHubSystem } from './github-system'
 
 export interface FlightState {
   x: number
@@ -74,12 +74,9 @@ export function createInitialFlight(system: GitHubSystem): InitialFlight {
       !outermost || planet.orbitRadius > outermost.orbitRadius ? planet : outermost,
     null,
   )
-  const x = outermostPlanet
-    ? Math.cos(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
-    : 0
-  const z = outermostPlanet
-    ? -Math.sin(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
-    : -EMPTY_SYSTEM_SPAWN_DISTANCE
+  const outermostPosition = outermostPlanet ? planetPositionAt(outermostPlanet, 0) : null
+  const x = outermostPosition?.x ?? 0
+  const z = outermostPosition?.z ?? -EMPTY_SYSTEM_SPAWN_DISTANCE
 
   return {
     state: {

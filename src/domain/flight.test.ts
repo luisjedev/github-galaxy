@@ -12,6 +12,7 @@ import {
 } from './flight'
 import {
   createGitHubSystem,
+  planetPositionAt,
   type GitHubProfile,
   type GitHubRepository,
 } from './github-system'
@@ -80,8 +81,7 @@ describe('createInitialFlight', () => {
     const outermostPlanet = [...system.planets].sort(
       (left, right) => right.orbitRadius - left.orbitRadius,
     )[0]
-    const x = Math.cos(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
-    const z = -Math.sin(outermostPlanet.initialPhase) * outermostPlanet.orbitRadius
+    const { x, z } = planetPositionAt(outermostPlanet, 0)
 
     expect(createInitialFlight(system)).toEqual({
       state: {

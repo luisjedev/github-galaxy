@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import {
   createGitHubSystem,
+  MAX_ORBIT_INCLINATION,
+  planetPositionAt,
   type GitHubProfile,
   type GitHubRepository,
 } from './github-system'
@@ -212,6 +214,10 @@ describe('createGitHubSystem', () => {
     for (const planet of first.planets) {
       expect(planet.initialPhase).toBeGreaterThanOrEqual(0)
       expect(planet.initialPhase).toBeLessThan(Math.PI * 2)
+      expect(planet.orbitInclination).toBeGreaterThanOrEqual(-MAX_ORBIT_INCLINATION)
+      expect(planet.orbitInclination).toBeLessThanOrEqual(MAX_ORBIT_INCLINATION)
+      expect(planet.orbitAscendingNode).toBeGreaterThanOrEqual(0)
+      expect(planet.orbitAscendingNode).toBeLessThan(Math.PI * 2)
       expect(planet.initialRotation).toBeGreaterThanOrEqual(0)
       expect(planet.initialRotation).toBeLessThan(Math.PI * 2)
       expect(planet.rotationSpeed).toBeGreaterThanOrEqual(0.03)
@@ -219,6 +225,17 @@ describe('createGitHubSystem', () => {
       expect(planet.orbitPeriodSeconds).toBeGreaterThanOrEqual(140)
       expect(planet.orbitPeriodSeconds).toBeLessThanOrEqual(260)
     }
+  })
+
+  test('inclina ligeramente cada plano y hace que el planeta cruce por encima y por debajo', () => {
+    const planet = createGitHubSystem(profile, [repository(4)]).planets[0]
+    const start = planetPositionAt(planet, 0)
+    const opposite = planetPositionAt(planet, planet.orbitPeriodSeconds / 2)
+
+    expect(Math.abs(planet.orbitInclination)).toBeLessThanOrEqual(MAX_ORBIT_INCLINATION)
+    expect(start.y).toBeCloseTo(-opposite.y)
+    expect(Math.hypot(start.x, start.y, start.z)).toBeCloseTo(planet.orbitRadius)
+    expect(Math.hypot(opposite.x, opposite.y, opposite.z)).toBeCloseTo(planet.orbitRadius)
   })
 
   test('refleja de forma controlada los cambios relevantes sin alterar la semilla del repositorio', () => {
@@ -231,12 +248,16 @@ describe('createGitHubSystem', () => {
     expect(after.relevanceScore).toBeGreaterThan(before.relevanceScore)
     expect({
       initialPhase: after.initialPhase,
+      orbitInclination: after.orbitInclination,
+      orbitAscendingNode: after.orbitAscendingNode,
       initialRotation: after.initialRotation,
       rotationSpeed: after.rotationSpeed,
       orbitPeriodSeconds: after.orbitPeriodSeconds,
       appearanceSeed: after.appearanceSeed,
     }).toEqual({
       initialPhase: before.initialPhase,
+      orbitInclination: before.orbitInclination,
+      orbitAscendingNode: before.orbitAscendingNode,
       initialRotation: before.initialRotation,
       rotationSpeed: before.rotationSpeed,
       orbitPeriodSeconds: before.orbitPeriodSeconds,

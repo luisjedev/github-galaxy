@@ -34,6 +34,8 @@ export function readVisualSettings(): VisualSettings {
   return {
     quality,
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    dpr: quality === 'normal' ? [1, Math.min(1.6, window.devicePixelRatio)] : [1, 1.15],
+    dpr: quality === 'normal'
+      ? [1, Math.min(2, window.devicePixelRatio)]
+      : [1, Math.min(1.5, window.devicePixelRatio)],
   }
 }

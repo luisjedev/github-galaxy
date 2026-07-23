@@ -63,6 +63,8 @@ export interface PlanetDescriptor {
   radius: number
   orbitRadius: number
   initialPhase: number
+  orbitInclination: number
+  orbitAscendingNode: number
   initialRotation: number
   rotationSpeed: number
   orbitPeriodSeconds: number
@@ -97,6 +99,8 @@ interface ScoredRepository {
 
 type PlanetSeedTrait =
   | 'phase'
+  | 'inclination'
+  | 'ascending-node'
   | 'rotation'
   | 'rotation-speed'
   | 'orbit-speed'
@@ -110,6 +114,9 @@ const MAX_PLANETS = 20
 const MIN_ORBIT_RADIUS = 12
 const SAFE_ORBIT_GAP = 2
 export const FULL_ROTATION_RADIANS = Math.PI * 2
+// A little over three degrees: visible at the outer orbits without making the
+// system feel vertically scattered.
+export const MAX_ORBIT_INCLINATION = Math.PI / 54
 
 export function planetOrbitPhase(planet: PlanetDescriptor, elapsedSeconds: number): number {
   return (
@@ -120,10 +127,17 @@ export function planetOrbitPhase(planet: PlanetDescriptor, elapsedSeconds: numbe
 
 export function planetPositionAt(planet: PlanetDescriptor, elapsedSeconds: number) {
   const phase = planetOrbitPhase(planet, elapsedSeconds)
+  const planarX = Math.cos(phase) * planet.orbitRadius
+  const planarZ = -Math.sin(phase) * planet.orbitRadius
+  const inclinedY = -planarZ * Math.sin(planet.orbitInclination)
+  const inclinedZ = planarZ * Math.cos(planet.orbitInclination)
+  const nodeCosine = Math.cos(planet.orbitAscendingNode)
+  const nodeSine = Math.sin(planet.orbitAscendingNode)
+
   return {
-    x: Math.cos(phase) * planet.orbitRadius,
-    y: 0,
-    z: -Math.sin(phase) * planet.orbitRadius,
+    x: planarX * nodeCosine + inclinedZ * nodeSine,
+    y: inclinedY,
+    z: -planarX * nodeSine + inclinedZ * nodeCosine,
   }
 }
 
@@ -319,6 +333,20 @@ function describePlanet(profile: GitHubProfile, scored: ScoredRepository): Plane
     radius: planetRadius(repository.size),
     orbitRadius: 0,
     initialPhase: seededRange(profile, repository, 'phase', 0, FULL_ROTATION_RADIANS),
+    orbitInclination: seededRange(
+      profile,
+      repository,
+      'inclination',
+      -MAX_ORBIT_INCLINATION,
+      MAX_ORBIT_INCLINATION,
+    ),
+    orbitAscendingNode: seededRange(
+      profile,
+      repository,
+      'ascending-node',
+      0,
+      FULL_ROTATION_RADIANS,
+    ),
     initialRotation: seededRange(profile, repository, 'rotation', 0, FULL_ROTATION_RADIANS),
     rotationSpeed: seededRange(profile, repository, 'rotation-speed', 0.03, 0.08),
     orbitPeriodSeconds: seededRange(profile, repository, 'orbit-speed', 140, 260),

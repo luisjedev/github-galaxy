@@ -69,7 +69,12 @@ function readCachedSystem(key: string, cacheTtlMs: number): GitHubSystem | null 
       !cached.system?.profile?.login ||
       !Array.isArray(cached.system.repositories) ||
       typeof cached.system.ownRepositoryCount !== 'number' ||
-      !Array.isArray(cached.system.planets)
+      !Array.isArray(cached.system.planets) ||
+      cached.system.planets.some(
+        (planet) =>
+          !Number.isFinite(planet.orbitInclination) ||
+          !Number.isFinite(planet.orbitAscendingNode),
+      )
     ) {
       window.localStorage.removeItem(`${CACHE_KEY_PREFIX}${key}`)
       return null

@@ -306,6 +306,8 @@ function Planet({ planet }: { planet: PlanetDescriptor }) {
       data-repository-id={repository.id}
       data-orbit-radius={planet.orbitRadius}
       data-orbit-period={planet.orbitPeriodSeconds}
+      data-orbit-inclination={planet.orbitInclination}
+      data-orbit-ascending-node={planet.orbitAscendingNode}
       data-planet-radius={planet.radius}
       data-body-radius={planet.radius}
       data-collision-radius={collisionRadius(planet.radius)}

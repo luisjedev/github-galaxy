@@ -1,88 +1,129 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   AdditiveBlending,
-  BufferAttribute,
-  BufferGeometry,
+  CanvasTexture,
   IcosahedronGeometry,
-  InstancedMesh,
   Mesh,
-  Object3D,
-  Vector3,
+  ShaderMaterial,
+  Sprite,
 } from 'three'
 import { STAR_RADIUS } from '../../domain/celestial-interaction'
 import type { StarAppearance } from '../../domain/github-system'
-import { deterministicUnit, type VisualQuality } from '../../domain/visual-generation'
+import type { VisualQuality } from '../../domain/visual-generation'
 import { colorFromHsl, hsl } from './visual-utils'
 
-function createStarGeometry(
-  appearance: StarAppearance,
-  quality: VisualQuality,
-): BufferGeometry {
-  const source = new IcosahedronGeometry(STAR_RADIUS, quality === 'normal' ? 4 : 3)
-  const geometry = source.index ? source.toNonIndexed() : source
-  const positions = geometry.getAttribute('position')
-  const colors = new Float32Array(positions.count * 3)
+const solarVertexShader = /* glsl */ `
+  varying vec3 vPosition;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
 
-  for (let face = 0; face < positions.count / 3; face += 1) {
-    const variation = deterministicUnit(appearance.facetSeed, face, 4)
-    const useAccent = deterministicUnit(appearance.facetSeed, face, 9) > 0.9
-    const hue = useAccent
-      ? appearance.accentHue
-      : appearance.primaryHue + (variation - 0.5) * 12
-    const color = colorFromHsl(
-      hue,
-      useAccent ? 0.96 : 0.9,
-      useAccent ? 0.62 + variation * 0.16 : 0.72 + variation * 0.2,
-    )
-    for (let vertex = 0; vertex < 3; vertex += 1) {
-      colors.set([color.r, color.g, color.b], (face * 3 + vertex) * 3)
-    }
+  void main() {
+    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vPosition = normalize(position);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDirection = normalize(cameraPosition - worldPosition.xyz);
+    gl_Position = projectionMatrix * viewMatrix * worldPosition;
+  }
+`
+
+const solarFragmentShader = /* glsl */ `
+  uniform float uTime;
+  uniform float uSeed;
+  uniform vec3 uDeepColor;
+  uniform vec3 uSurfaceColor;
+  uniform vec3 uHotColor;
+  varying vec3 vPosition;
+  varying vec3 vNormal;
+  varying vec3 vViewDirection;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
   }
 
-  geometry.setAttribute('color', new BufferAttribute(colors, 3))
-  if (geometry !== source) source.dispose()
-  return geometry
-}
+  float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+          mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+          mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+      f.z
+    );
+  }
 
-function StarFlares({ appearance, quality }: { appearance: StarAppearance; quality: VisualQuality }) {
-  const count = quality === 'normal' ? 10 : 4
-  const flareUnit = STAR_RADIUS / 4
-  const mesh = useRef<InstancedMesh>(null)
-
-  useLayoutEffect(() => {
-    if (!mesh.current) return
-    const helper = new Object3D()
-    const up = new Vector3(0, 1, 0)
-    for (let index = 0; index < count; index += 1) {
-      const direction = new Vector3(
-        deterministicUnit(appearance.facetSeed, index, 30) * 2 - 1,
-        deterministicUnit(appearance.facetSeed, index, 31) * 2 - 1,
-        deterministicUnit(appearance.facetSeed, index, 32) * 2 - 1,
-      ).normalize()
-      const height = (0.28 + deterministicUnit(appearance.facetSeed, index, 33) * 0.48) * appearance.flareScale
-      helper.position.copy(direction).multiplyScalar(STAR_RADIUS + height * flareUnit * 0.35)
-      helper.quaternion.setFromUnitVectors(up, direction)
-      helper.scale.set(0.65 + height * 0.25, height, 0.65 + height * 0.25)
-      helper.updateMatrix()
-      mesh.current.setMatrixAt(index, helper.matrix)
+  float fbm(vec3 p) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; i++) {
+      value += noise(p) * amplitude;
+      p = p * 2.03 + vec3(7.1, 3.7, 5.9);
+      amplitude *= 0.5;
     }
-    mesh.current.instanceMatrix.needsUpdate = true
-  }, [appearance, count, flareUnit])
+    return value;
+  }
 
-  return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, count]}>
-      <coneGeometry args={[0.34 * flareUnit, flareUnit, 4]} />
-      <meshBasicMaterial
-        color={hsl(appearance.coronaHue, 96, 66)}
-        transparent
-        opacity={0.66}
-        depthWrite={false}
-        blending={AdditiveBlending}
-        toneMapped={false}
-      />
-    </instancedMesh>
+  void main() {
+    vec3 flow = vec3(uTime * 0.025, -uTime * 0.014, uTime * 0.009);
+    vec3 seededPosition = vPosition + vec3(uSeed * 0.000013);
+
+    // Large convection currents with a finer, bright granular layer.
+    float convection = fbm(seededPosition * 3.2 + flow);
+    float granules = noise(seededPosition * 19.0 - flow * 2.6);
+    float filaments = fbm(seededPosition * 8.0 + flow * 1.8);
+    // Blend the smallest details to avoid harsh, pixel-like transitions at a distance.
+    float grainWidth = max(fwidth(granules) * 1.8, 0.025);
+    float smoothGranules = smoothstep(0.34 - grainWidth, 0.72 + grainWidth, granules);
+    float heat = clamp(convection * 0.72 + smoothGranules * 0.2 + filaments * 0.18, 0.0, 1.0);
+
+    // Stable, irregular darker magnetic regions resembling sunspots.
+    float magneticField = fbm(seededPosition * 1.65 + vec3(uSeed * 0.0007));
+    float spotDetail = fbm(seededPosition * 8.0 - flow * 0.3);
+    float sunspot = smoothstep(0.69, 0.79, magneticField) * smoothstep(0.42, 0.7, spotDetail);
+
+    vec3 color = mix(uDeepColor, uSurfaceColor, smoothstep(0.2, 0.75, heat));
+    color = mix(color, uHotColor, smoothstep(0.68, 0.96, heat));
+    color *= 1.0 - sunspot * 0.62;
+
+    float facing = max(dot(normalize(vNormal), normalize(vViewDirection)), 0.0);
+    float limbDarkening = 0.58 + 0.42 * pow(facing, 0.42);
+    float rimHeat = pow(1.0 - facing, 3.0) * 0.28;
+    color = color * limbDarkening + uDeepColor * rimHeat;
+
+    gl_FragColor = vec4(color * 1.22, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
+function createHaloTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas')
+  const textureSize = 1024
+  const center = textureSize / 2
+  canvas.width = textureSize
+  canvas.height = textureSize
+  const context = canvas.getContext('2d')!
+  const gradient = context.createRadialGradient(
+    center,
+    center,
+    textureSize * 0.195,
+    center,
+    center,
+    center,
   )
+  gradient.addColorStop(0, 'rgba(255, 244, 175, 0)')
+  gradient.addColorStop(0.31, 'rgba(255, 225, 102, 0)')
+  gradient.addColorStop(0.39, 'rgba(255, 190, 45, 0.34)')
+  gradient.addColorStop(0.53, 'rgba(255, 125, 18, 0.14)')
+  gradient.addColorStop(0.72, 'rgba(255, 90, 10, 0.045)')
+  gradient.addColorStop(1, 'rgba(255, 70, 0, 0)')
+  context.fillStyle = gradient
+  context.fillRect(0, 0, textureSize, textureSize)
+  return new CanvasTexture(canvas)
 }
 
 export function ProceduralStar({
@@ -95,34 +136,65 @@ export function ProceduralStar({
   reducedMotion: boolean
 }) {
   const core = useRef<Mesh>(null)
+  const surfaceMaterial = useRef<ShaderMaterial>(null)
+  const halo = useRef<Sprite>(null)
   const geometry = useMemo(
-    () => createStarGeometry(appearance, quality),
-    [appearance, quality],
+    () => new IcosahedronGeometry(STAR_RADIUS, quality === 'normal' ? 6 : 4),
+    [quality],
   )
+  const haloTexture = useMemo(() => createHaloTexture(), [])
 
-  useEffect(() => () => geometry.dispose(), [geometry])
+  const surfaceUniforms = useMemo(() => ({
+    uTime: { value: 0 },
+    uSeed: { value: appearance.facetSeed % 100_000 },
+    uDeepColor: { value: colorFromHsl(appearance.accentHue - 4, 1, 0.42) },
+    uSurfaceColor: { value: colorFromHsl(appearance.primaryHue, 1, 0.58) },
+    uHotColor: { value: colorFromHsl(appearance.coronaHue + 7, 1, 0.86) },
+  }), [appearance])
+  useEffect(() => () => {
+    geometry.dispose()
+    haloTexture.dispose()
+  }, [geometry, haloTexture])
 
   useFrame(({ clock }, elapsedSeconds) => {
+    const time = reducedMotion ? 0 : clock.elapsedTime
+    if (surfaceMaterial.current) surfaceMaterial.current.uniforms.uTime.value = time
     if (core.current) {
-      core.current.rotation.y += elapsedSeconds * (reducedMotion ? 0.012 : 0.045)
-      const pulse = reducedMotion ? 1 : 1 + Math.sin(clock.elapsedTime * 0.72) * 0.008
+      core.current.rotation.y += elapsedSeconds * (reducedMotion ? 0.006 : 0.022)
+      core.current.rotation.x = Math.sin(time * 0.045) * 0.025
+      const pulse = reducedMotion ? 1 : 1 + Math.sin(time * 0.7) * 0.004
       core.current.scale.setScalar(pulse)
+    }
+    if (halo.current && !reducedMotion) {
+      const haloPulse = 1 + Math.sin(time * 0.43) * 0.018
+      halo.current.scale.set(25 * haloPulse, 25 * haloPulse, 1)
     }
   })
 
   return (
     <group>
+      <sprite ref={halo} scale={[25, 25, 1]} renderOrder={-1}>
+        <spriteMaterial
+          map={haloTexture}
+          color={hsl(appearance.coronaHue, 100, 72)}
+          transparent
+          opacity={0.82}
+          depthWrite={false}
+          blending={AdditiveBlending}
+          toneMapped={false}
+        />
+      </sprite>
+
       <mesh ref={core} geometry={geometry}>
-        <meshStandardMaterial
-          vertexColors
-          emissive={hsl(appearance.primaryHue - 4, 100, 56)}
-          emissiveIntensity={1.1 * appearance.luminosity}
-          roughness={0.72}
-          metalness={0}
+        <shaderMaterial
+          ref={surfaceMaterial}
+          uniforms={surfaceUniforms}
+          vertexShader={solarVertexShader}
+          fragmentShader={solarFragmentShader}
           toneMapped={false}
         />
       </mesh>
-      <StarFlares appearance={appearance} quality={quality} />
+
     </group>
   )
 }

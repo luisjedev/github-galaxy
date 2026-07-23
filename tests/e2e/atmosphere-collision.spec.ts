@@ -113,12 +113,17 @@ test('el respawn sobre la última órbita queda fuera de la atmósfera planetari
 
   const planet = page.locator('[data-repository-id="1"]')
   const orbitRadius = Number(await planet.getAttribute('data-orbit-radius'))
+  const orbitInclination = Number(await planet.getAttribute('data-orbit-inclination'))
   const collisionRadius = Number(await planet.getAttribute('data-collision-radius'))
   const atmosphereRadius = Number(await planet.getAttribute('data-atmosphere-radius'))
   const spawnX = await numberAttribute(page, 'data-x')
   const spawnZ = await numberAttribute(page, 'data-z')
 
-  expect(Math.hypot(spawnX, spawnZ)).toBeCloseTo(orbitRadius, 2)
+  const projectedOrbitRadius = Math.hypot(spawnX, spawnZ)
+  expect(projectedOrbitRadius).toBeLessThanOrEqual(orbitRadius)
+  expect(projectedOrbitRadius).toBeGreaterThanOrEqual(
+    orbitRadius * Math.cos(Math.abs(orbitInclination)),
+  )
   expect(await numberAttribute(page, 'data-altitude')).toBe(7)
   expect(atmosphereRadius).toBeGreaterThan(collisionRadius)
   await expect(page.getByTestId('flight-state')).toHaveAttribute(
