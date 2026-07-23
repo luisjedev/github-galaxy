@@ -7,8 +7,16 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await expect(page.getByRole('heading', { name: 'Pilota tu nave. Descubre sistemas.' })).toBeVisible()
   await expect(page.getByLabel('Tu usuario de GitHub')).toBeVisible()
   await expect(page.getByText(/viaja a los sistemas de otros usuarios/i)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Explorar sistema' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Visitar un sistema aleatorio' })).toBeVisible()
+  const exploreButton = page.getByRole('button', { name: 'Explorar sistema' })
+  const randomButton = page.getByRole('button', { name: 'Visitar un sistema aleatorio' })
+  await expect(exploreButton).toBeVisible()
+  await expect(randomButton).toBeVisible()
+  const [exploreBox, randomBox] = await Promise.all([
+    exploreButton.boundingBox(),
+    randomButton.boundingBox(),
+  ])
+  expect(exploreBox!.y).toBe(randomBox!.y)
+  expect(exploreBox!.width).toBeCloseTo(randomBox!.width, 0)
   await expect(page.getByText(/experiencia de escritorio con teclado/i)).toBeVisible()
   await expect(page.getByText('W / S', { exact: true })).toBeVisible()
   await expect(page.getByText('A / D')).toBeVisible()
@@ -21,8 +29,17 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await expect(page.getByText(/API pública de GitHub sin autenticación/i)).toBeVisible()
   await expect(page.getByText(/límite de solicitudes/i)).toBeVisible()
   await expect(page.getByLabel(/token/i)).toHaveCount(0)
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight),
+  ).toBe(true)
 
-  const credit = page.getByLabel('Créditos de autor')
+  const heroHeader = page.locator('.hero__header')
+  const brand = heroHeader.getByLabel('GitGalaxy')
+  const credit = heroHeader.getByLabel('Créditos de autor')
+  await expect(brand).toBeVisible()
+  await expect(credit).toBeVisible()
+  const [brandBox, creditBox] = await Promise.all([brand.boundingBox(), credit.boundingBox()])
+  expect(creditBox!.x).toBeGreaterThan(brandBox!.x + brandBox!.width)
   await expect(credit).toContainText('Done with')
   await expect(credit).toContainText('by @luisjedev')
   await expect(credit.getByRole('img', { name: 'amor' })).toBeVisible()

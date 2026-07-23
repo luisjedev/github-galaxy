@@ -79,7 +79,7 @@ function Brand() {
 
 function CreatorCredit({ variant }: { variant: 'home' | 'game' }) {
   return (
-    <footer
+    <div
       className={`creator-credit creator-credit--${variant}`}
       aria-label="Créditos de autor"
     >
@@ -115,7 +115,7 @@ function CreatorCredit({ variant }: { variant: 'home' | 'game' }) {
           </svg>
         </a>
       </span>
-    </footer>
+    </div>
   )
 }
 
@@ -166,7 +166,10 @@ function Menu({
   return (
     <main className="menu-layout" data-app-state="menu">
       <section className="hero">
-        <Brand />
+        <header className="hero__header">
+          <Brand />
+          <CreatorCredit variant="home" />
+        </header>
         <div className="hero__copy">
           <p className="eyebrow">Exploración procedural de GitHub</p>
           <h1>
@@ -202,8 +205,13 @@ function Menu({
                 setValidationError(null)
               }}
             />
+          </div>
+          <div className="explore-form__actions">
             <button type="submit">
               Explorar sistema <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" className="random-explore" onClick={onExploreRandom}>
+              Visitar un sistema aleatorio <span aria-hidden="true">↝</span>
             </button>
           </div>
           {validationError ? (
@@ -215,12 +223,6 @@ function Menu({
               Pulsa Enter para despegar hacia tu sistema
             </p>
           )}
-          <div className="explore-form__alternative">
-            <span aria-hidden="true">o</span>
-            <button type="button" className="random-explore" onClick={onExploreRandom}>
-              Visitar un sistema aleatorio <span aria-hidden="true">↝</span>
-            </button>
-          </div>
           <p className="api-notice">
             Usamos la API pública de GitHub sin autenticación. Tiene un límite de solicitudes y nunca
             te pediremos un token.
@@ -241,8 +243,6 @@ function Menu({
           ))}
         </dl>
       </aside>
-
-      <CreatorCredit variant="home" />
     </main>
   )
 }
