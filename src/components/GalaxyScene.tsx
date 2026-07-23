@@ -41,7 +41,7 @@ export interface CelestialMarkerState {
   direction?: Point2D
 }
 
-const PLANET_MARKER_DISCOVERY_CLEARANCE = 14
+const PLANET_MARKER_DISCOVERY_CLEARANCE = 18
 // Scale the chase rig with the ship so its screen-space composition stays unchanged.
 const SHIP_CAMERA_COMPOSITION_SCALE = SHIP_WORLD_SCALE / 0.06
 const CHASE_CAMERA_BACK_DISTANCE = 0.85 * SHIP_CAMERA_COMPOSITION_SCALE
