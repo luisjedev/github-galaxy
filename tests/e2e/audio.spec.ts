@@ -196,7 +196,8 @@ test('el silencio global se conserva al pausar y al cargar otro sistema', async 
   await page.keyboard.press('Escape')
   const pauseMenu = page.getByRole('dialog', { name: 'Exploración de pilot' })
   await expect(page.locator('[data-app-state="pause"]')).toBeVisible()
-  await expect(pauseMenu.getByRole('button', { name: 'Activar audio' })).toBeVisible()
+  await expect(pauseMenu.getByRole('button', { name: 'Usar agujero de gusano' })).toBeVisible()
+  await expect(pauseMenu.getByRole('button', { name: /audio/i })).toHaveCount(0)
   await expect(audioControl).toHaveAttribute('data-audio-state', 'muted')
   await page.getByRole('button', { name: 'Volver al menú principal' }).click()
 

@@ -77,6 +77,48 @@ function Brand() {
   )
 }
 
+function CreatorCredit({ variant }: { variant: 'home' | 'game' }) {
+  return (
+    <footer
+      className={`creator-credit creator-credit--${variant}`}
+      aria-label="Créditos de autor"
+    >
+      <span className="creator-credit__byline">
+        Done with
+        <svg className="creator-credit__heart" viewBox="0 0 24 24" aria-label="amor" role="img">
+          <path d="M12 21s-7.2-4.5-9.5-9.1C.5 7.9 2.8 4 6.7 4c2.2 0 4.1 1.2 5.3 3 1.2-1.8 3.1-3 5.3-3 3.9 0 6.2 3.9 4.2 7.9C19.2 16.5 12 21 12 21Z" />
+        </svg>
+        {' by '}
+        <a href="https://github.com/luisjedev" target="_blank" rel="noreferrer noopener">
+          @luisjedev
+        </a>
+      </span>
+      <span className="creator-credit__socials">
+        <a
+          href="https://github.com/luisjedev"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="GitHub de @luisjedev"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 .7a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2.2c-3.4.7-4.1-1.4-4.1-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.6.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C16.2 5.8 17.2 6 17.2 6c.6 1.5.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.8 5.4-5.5 5.7.4.4.8 1.1.8 2.1v3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .7Z" />
+          </svg>
+        </a>
+        <a
+          href="https://www.linkedin.com/in/luisjedev/"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="LinkedIn de @luisjedev"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2ZM8 19H5V9.5h3V19ZM6.5 8.2A1.75 1.75 0 1 1 6.5 4.7a1.75 1.75 0 0 1 0 3.5ZM19 19h-3v-4.6c0-1.1 0-2.5-1.6-2.5s-1.8 1.2-1.8 2.5V19h-3V9.5h2.9v1.3h.1a3.2 3.2 0 0 1 2.8-1.6c3 0 3.6 2 3.6 4.6V19Z" />
+          </svg>
+        </a>
+      </span>
+    </footer>
+  )
+}
+
 function CompatibilityNotice({ reason }: { reason: 'mobile' | 'webgl' }) {
   const isMobile = reason === 'mobile'
 
@@ -199,6 +241,8 @@ function Menu({
           ))}
         </dl>
       </aside>
+
+      <CreatorCredit variant="home" />
     </main>
   )
 }
@@ -853,17 +897,20 @@ function Exploration({
         </aside>
       ) : null}
 
-      <details className="flight-help" open>
-        <summary>Guía de vuelo</summary>
-        <dl>
-          {controls.map(([key, action]) => (
-            <div key={key}>
-              <dt>{key}</dt>
-              <dd>{action}</dd>
-            </div>
-          ))}
-        </dl>
-      </details>
+      <div className="flight-corner">
+        <details className="flight-help" open>
+          <summary>Guía de vuelo</summary>
+          <dl>
+            {controls.map(([key, action]) => (
+              <div key={key}>
+                <dt>{key}</dt>
+                <dd>{action}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+        <CreatorCredit variant="game" />
+      </div>
 
       {paused ? (
         <section
@@ -883,11 +930,12 @@ function Exploration({
               </button>
               <button
                 type="button"
-                onClick={onAudioToggle}
-                disabled={audioState === 'unavailable'}
-                aria-pressed={audioState === 'muted'}
+                onClick={() => {
+                  onTogglePause()
+                  startWormholeTravel()
+                }}
               >
-                {currentAudioPresentation.action}
+                Usar agujero de gusano
               </button>
               <button type="button" onClick={onReturnToMenu}>
                 Volver al menú principal
@@ -1143,7 +1191,7 @@ function AppView({
           onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
           onReturnToMenu={returnToMenu}
           onSystemArrival={(destination) => {
-            if (state.name !== 'exploration') return
+            if (state.name !== 'exploration' && state.name !== 'pause') return
             const visited = [
               state.system.profile.login,
               ...recentLogins,

@@ -28,7 +28,8 @@ input {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+.creator-credit a:focus-visible {
   outline: 3px solid #f8cf68;
   outline-offset: 3px;
 }
@@ -84,6 +85,7 @@ input:focus-visible {
 .menu-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 0.65fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 100vh;
 }
 
@@ -91,7 +93,7 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 100vh;
+  min-height: 0;
   padding: clamp(2rem, 5vw, 4.5rem) clamp(2rem, 8vw, 8.5rem);
 }
 
@@ -315,6 +317,61 @@ input:focus-visible {
   color: #757d98;
   font-size: 0.72rem;
   line-height: 1.5;
+}
+
+.creator-credit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  color: #858da8;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.7rem;
+}
+
+.creator-credit--home {
+  grid-column: 1 / -1;
+  padding: 1rem 2rem 1.15rem;
+  border-top: 1px solid rgb(172 163 211 / 10%);
+  background: rgb(5 7 19 / 58%);
+}
+
+.creator-credit__byline,
+.creator-credit__socials {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.creator-credit a {
+  border-radius: 0.2rem;
+  color: #aeb5cf;
+  text-decoration: none;
+  transition: color 140ms ease, opacity 140ms ease;
+}
+
+.creator-credit a:hover {
+  color: #8df5df;
+}
+
+.creator-credit__heart,
+.creator-credit__socials svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+.creator-credit__heart {
+  color: #ff718d;
+}
+
+.creator-credit__socials {
+  gap: 0.6rem;
+}
+
+.creator-credit__socials a {
+  padding: 0.15rem;
 }
 
 .controls-panel {
@@ -1056,12 +1113,19 @@ input:focus-visible {
   display: none;
 }
 
-.flight-help {
+.flight-corner {
   position: absolute;
   z-index: 6;
   right: clamp(2rem, 5vw, 4rem);
-  bottom: clamp(2rem, 5vw, 4rem);
+  bottom: clamp(1.25rem, 3vw, 2.5rem);
+  display: flex;
   width: min(18rem, calc(100vw - 4rem));
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.flight-help {
+  width: 100%;
   border: 1px solid rgb(169 149 255 / 24%);
   border-radius: 0.7rem;
   color: #d9dced;
@@ -1100,6 +1164,22 @@ input:focus-visible {
 .flight-help dd {
   margin: 0;
   color: #949bb5;
+}
+
+.creator-credit--game {
+  justify-content: flex-end;
+  padding-right: 0.15rem;
+  color: #626a80;
+  font-size: 0.6rem;
+}
+
+.creator-credit--game a,
+.creator-credit--game .creator-credit__heart {
+  color: #70788d;
+}
+
+.creator-credit--game a:hover {
+  color: #969db0;
 }
 
 .pause-overlay {
@@ -1229,10 +1309,15 @@ input:focus-visible {
 @media (max-width: 900px) {
   .menu-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
   }
 
   .hero {
     min-height: auto;
+  }
+
+  .creator-credit--home {
+    grid-column: 1;
   }
 
   .controls-panel {

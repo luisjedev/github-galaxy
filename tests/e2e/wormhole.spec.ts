@@ -96,6 +96,51 @@ test('cruzar el cinturón abre una sola decisión, bloquea controles y quedarse 
   expect(await flightNumber(page, 'data-heading')).toBeCloseTo(spawn.heading, 3)
 })
 
+test('el menú de pausa permite usar el agujero de gusano sin pilotar hasta el límite', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  let searchRequests = 0
+  await page.route('https://api.github.com/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/search/users') {
+      searchRequests += 1
+      await route.fulfill({
+        json: {
+          total_count: 1,
+          incomplete_results: false,
+          items: [{ login: destination.login }],
+        },
+      })
+      return
+    }
+    await fulfillSystemRoute(
+      route,
+      url.pathname.toLowerCase().includes(destination.login) ? destination.login : origin.login,
+    )
+  })
+
+  await page.goto(`/${origin.login}`)
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  const pauseMenu = page.getByRole('dialog', { name: `Exploración de ${origin.login}` })
+  const wormholeButton = pauseMenu.getByRole('button', { name: 'Usar agujero de gusano' })
+  await expect(wormholeButton).toBeVisible()
+  await expect(pauseMenu.getByRole('button', { name: /audio/i })).toHaveCount(0)
+  await wormholeButton.click()
+
+  await expect(pauseMenu).toHaveCount(0)
+  await expect(page.getByRole('status', { name: 'Viaje por el agujero de gusano' })).toBeVisible()
+  await expect(page.locator('[data-app-state="exploration"]')).toHaveAttribute(
+    'data-controls-locked',
+    'true',
+  )
+  await expect(page).toHaveURL(new RegExp(`/${destination.login}$`), { timeout: 4_000 })
+  await expect(page.getByRole('heading', { name: `Sistema de ${destination.login}` })).toBeVisible()
+  expect(searchRequests).toBe(1)
+})
+
 test('viajar consulta Search, mantiene el túnel hasta cargar y llega al respawn compartible', async ({
   page,
 }, testInfo) => {

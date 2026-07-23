@@ -40,7 +40,7 @@ export function transitionAppState(state: AppState, event: AppEvent): AppState {
         ? { name: 'exploration', username: event.system.profile.login, system: event.system }
         : state
     case 'REPLACE_SYSTEM':
-      return state.name === 'exploration'
+      return state.name === 'exploration' || state.name === 'pause'
         ? {
             name: 'exploration',
             username: event.system.profile.login,

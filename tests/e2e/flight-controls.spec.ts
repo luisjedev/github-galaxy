@@ -103,6 +103,18 @@ test('muestra una única nave procedural determinista, la cámara de seguimiento
   await expect(page.getByText('E', { exact: true })).toBeVisible()
   await expect(page.getByText('R', { exact: true })).toBeVisible()
   await expect(page.getByText('Esc', { exact: true })).toBeVisible()
+
+  const credit = page.getByLabel('Créditos de autor')
+  await expect(credit).toContainText('Done with')
+  await expect(credit).toContainText('by @luisjedev')
+  await expect(credit.getByRole('link', { name: 'GitHub de @luisjedev' })).toHaveAttribute(
+    'href',
+    'https://github.com/luisjedev',
+  )
+  await expect(credit.getByRole('link', { name: 'LinkedIn de @luisjedev' })).toHaveAttribute(
+    'href',
+    'https://www.linkedin.com/in/luisjedev/',
+  )
 })
 
 test('permite avanzar, girar, cambiar altitud y aplicar reversa con teclado', async ({ page }) => {

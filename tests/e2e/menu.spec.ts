@@ -21,6 +21,19 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await expect(page.getByText(/API pública de GitHub sin autenticación/i)).toBeVisible()
   await expect(page.getByText(/límite de solicitudes/i)).toBeVisible()
   await expect(page.getByLabel(/token/i)).toHaveCount(0)
+
+  const credit = page.getByLabel('Créditos de autor')
+  await expect(credit).toContainText('Done with')
+  await expect(credit).toContainText('by @luisjedev')
+  await expect(credit.getByRole('img', { name: 'amor' })).toBeVisible()
+  await expect(credit.getByRole('link', { name: 'GitHub de @luisjedev' })).toHaveAttribute(
+    'href',
+    'https://github.com/luisjedev',
+  )
+  await expect(credit.getByRole('link', { name: 'LinkedIn de @luisjedev' })).toHaveAttribute(
+    'href',
+    'https://www.linkedin.com/in/luisjedev/',
+  )
 })
 
 test('permite continuar con Enter y expone el estado de carga', async ({ page }) => {
