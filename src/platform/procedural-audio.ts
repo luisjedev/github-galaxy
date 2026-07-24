@@ -14,6 +14,8 @@ export interface ReactiveAudioState {
   teleportPhase: TeleportAudioPhase
 }
 
+export type FavoriteAudioAction = 'added' | 'removed'
+
 type AudioContextConstructor = new () => AudioContext
 
 function audioContextConstructor(): AudioContextConstructor | null {
@@ -83,6 +85,7 @@ export class ProceduralAudioEngine {
   private muted = false
   private proximityActive = false
   private teleportPhase: TeleportAudioPhase = 'idle'
+  private favoriteOneShots = new Set<OscillatorNode>()
 
   async activate(): Promise<void> {
     if (!this.context) this.createGraph()
@@ -94,6 +97,50 @@ export class ProceduralAudioEngine {
   setMuted(muted: boolean) {
     this.muted = muted
     this.applyMasterLevel()
+  }
+
+  playFavoriteCue(action: FavoriteAudioAction): boolean {
+    const context = this.context
+    const master = this.masterGain
+    if (!context || !master || this.muted) return false
+
+    // A new favorite signal replaces any still-ringing predecessor so rapid
+    // toggles remain crisp rather than accumulating into a harsh chord.
+    this.stopFavoriteCues()
+
+    const now = context.currentTime
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = action === 'added' ? 'sine' : 'triangle'
+    const startFrequency = action === 'added' ? 440 : 620
+    const endFrequency = action === 'added' ? 880 : 260
+    oscillator.frequency.setValueAtTime(startFrequency, now)
+    oscillator.frequency.exponentialRampToValueAtTime(endFrequency, now + 0.28)
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.055, now + 0.035)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34)
+    oscillator.connect(gain)
+    gain.connect(master)
+    oscillator.start(now)
+    oscillator.stop(now + 0.36)
+    this.favoriteOneShots.add(oscillator)
+    oscillator.onended = () => this.favoriteOneShots.delete(oscillator)
+    return true
+  }
+
+  stopFavoriteCues() {
+    for (const pending of this.favoriteOneShots) {
+      try { pending.stop() } catch { /* The node may already have ended. */ }
+    }
+    this.favoriteOneShots.clear()
+  }
+
+  async dispose(): Promise<void> {
+    this.stopFavoriteCues()
+    const context = this.context
+    this.context = null
+    this.masterGain = null
+    if (context && typeof context.close === 'function') await context.close()
   }
 
   update(state: ReactiveAudioState) {

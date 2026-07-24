@@ -5,10 +5,11 @@ import {
 } from '../platform/procedural-audio'
 
 export type AudioExperienceState = 'waiting' | 'active' | 'muted' | 'unavailable'
+export type FavoriteCueResult = 'ascending' | 'descending' | 'muted' | 'unavailable'
 
 export function useProceduralAudio() {
   const engineRef = useRef<ProceduralAudioEngine | null>(null)
-  const activationStartedRef = useRef(false)
+  const activationPromiseRef = useRef<Promise<void> | null>(null)
   const [state, setState] = useState<AudioExperienceState>('waiting')
   const stateRef = useRef<AudioExperienceState>('waiting')
 
@@ -18,26 +19,21 @@ export function useProceduralAudio() {
   }, [])
 
   const activate = useCallback(async () => {
-    if (
-      stateRef.current === 'active' ||
-      stateRef.current === 'muted' ||
-      stateRef.current === 'unavailable'
-    ) {
-      return
+    if (stateRef.current !== 'waiting') return
+    if (!activationPromiseRef.current) {
+      activationPromiseRef.current = (async () => {
+        try {
+          const engine = engineRef.current ?? new ProceduralAudioEngine()
+          engineRef.current = engine
+          await engine.activate()
+          engine.setMuted(false)
+          setAudioState('active')
+        } catch {
+          setAudioState('unavailable')
+        }
+      })()
     }
-
-    if (activationStartedRef.current) return
-    activationStartedRef.current = true
-
-    try {
-      const engine = engineRef.current ?? new ProceduralAudioEngine()
-      engineRef.current = engine
-      await engine.activate()
-      engine.setMuted(false)
-      setAudioState('active')
-    } catch {
-      setAudioState('unavailable')
-    }
+    await activationPromiseRef.current
   }, [setAudioState])
 
   useEffect(() => {
@@ -80,18 +76,27 @@ export function useProceduralAudio() {
     engineRef.current?.update(reactiveState)
   }, [])
 
+  const playFavoriteCue = useCallback(async (
+    action: 'added' | 'removed',
+  ): Promise<FavoriteCueResult> => {
+    if (stateRef.current === 'waiting') await activate()
+    if (stateRef.current === 'muted') return 'muted'
+    if (stateRef.current !== 'active') return 'unavailable'
+    return engineRef.current?.playFavoriteCue(action)
+      ? action === 'added' ? 'ascending' : 'descending'
+      : 'unavailable'
+  }, [activate])
+
+  const cancelFavoriteCues = useCallback(() => {
+    engineRef.current?.stopFavoriteCues()
+  }, [])
+
   useEffect(
     () => () => {
-      engineRef.current?.update({
-        speed: 0,
-        turbo: false,
-        proximity: false,
-        paused: true,
-        teleportPhase: 'idle',
-      })
+      void engineRef.current?.dispose()
     },
     [],
   )
 
-  return { state, activate, toggleMuted, update }
+  return { state, activate, toggleMuted, update, playFavoriteCue, cancelFavoriteCues }
 }

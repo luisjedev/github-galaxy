@@ -57,6 +57,25 @@ async function interceptGitHub(
   })
 }
 
+async function installControlledAudioContext(page: Page) {
+  await page.addInitScript(() => {
+    class ControlledAudioContext {
+      currentTime = 0
+      sampleRate = 100
+      state: AudioContextState = 'suspended'
+      destination = {}
+      createGain() { return { gain: { value: 1, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} }, connect() {}, disconnect() {} } }
+      createOscillator() { return { type: 'sine', frequency: { value: 440, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} }, detune: { value: 0 }, connect() {}, disconnect() {}, start() {}, stop() {} } }
+      createBiquadFilter() { return { type: 'lowpass', frequency: { value: 440 }, Q: { value: 1 }, connect() {}, disconnect() {} } }
+      createBuffer(_channels: number, length: number) { return { getChannelData: () => new Float32Array(length) } }
+      createBufferSource() { return { buffer: null, loop: false, connect() {}, disconnect() {}, start() {}, stop() {} } }
+      async resume() { this.state = 'running' }
+      async close() { this.state = 'closed' }
+    }
+    Object.defineProperty(window, 'AudioContext', { configurable: true, value: ControlledAudioContext })
+  })
+}
+
 const favoritesState = (page: Page) => page.getByTestId('favorites-state')
 
 test('alterna con F, evita repetición y conserva favoritos globales entre sistemas y recargas', async ({
@@ -247,7 +266,7 @@ test('abre y elimina el favorito seleccionado sin filtrar E, F o J/K al vuelo', 
   await page.keyboard.down('f')
   await page.keyboard.up('f')
   await expect(menu).toHaveAttribute('data-favorite-count', '2')
-  await expect(menu.getByRole('status', { name: 'Confirmación de favoritos' })).toHaveText('Eliminado de favoritos')
+  await expect(menu.getByRole('status', { name: 'Confirmación de favoritos' })).toContainText('Eliminado de favoritos')
   await expect(menu.getByRole('option').nth(1)).toContainText('pilot/pilot-world')
   await expect(menu.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true')
   await expect(favoritesState(page)).toHaveAttribute('data-favorite-count', '2')
@@ -275,4 +294,58 @@ test('un localStorage corrupto usa memoria, avisa una vez y permite seguir explo
   await expect(favoritesState(page)).toHaveAttribute('data-favorite-count', '0')
   await expect(page.getByText('Los favoritos no podrán conservarse al cerrar esta pestaña')).toHaveCount(1)
   expect(await page.evaluate(() => localStorage.getItem('gitgalaxy:favorites'))).toBe('{invalid')
+})
+
+test('observa feedback visual y sonoro diferenciado al añadir, quitar y eliminar desde el menú', async ({ page }) => {
+  await installControlledAudioContext(page)
+  await interceptGitHub(page)
+  await page.goto('/pilot')
+  await expect(page.getByRole('complementary', { name: 'Ficha de pilot-world' })).toBeVisible()
+
+  await page.keyboard.press('f')
+  const effect = page.getByTestId('favorite-effect')
+  await expect(effect).toHaveAttribute('data-favorite-action', 'added')
+  await expect(effect).toHaveAttribute('data-repository-id', '1')
+  await expect(effect).toHaveAttribute('data-favorite-audio', 'ascending')
+  await expect(effect).toHaveAttribute('data-favorite-phase', /^(flash|travel)$/)
+  await expect(page.getByTestId('favorite-feedback')).toContainText('pilot/pilot-world')
+  await expect(effect).toHaveCount(0, { timeout: 2_500 })
+
+  await page.keyboard.press('f')
+  await expect(effect).toHaveAttribute('data-favorite-action', 'removed')
+  await expect(effect).toHaveAttribute('data-favorite-audio', 'descending')
+  await expect(page.getByTestId('favorite-feedback')).toContainText('pilot/pilot-world')
+  await expect(effect).toHaveCount(0, { timeout: 2_500 })
+
+  await page.keyboard.press('f')
+  await page.keyboard.press('m')
+  await page.keyboard.press('f')
+  const menu = page.getByRole('dialog', { name: 'Repositorios favoritos' })
+  const departing = menu.locator('.favorite-row--departing')
+  await expect(menu).toHaveAttribute('data-favorite-count', '0')
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('gitgalaxy:favorites')!).favorites)).toEqual([])
+  await expect(departing).toHaveAttribute('data-favorite-phase', /^(flash|collapse)$/)
+  await expect(departing).toHaveAttribute('data-favorite-audio', 'descending')
+  await expect(menu.getByRole('status', { name: 'Confirmación de favoritos' })).toContainText('pilot/pilot-world')
+  await expect(departing).toHaveCount(0, { timeout: 2_500 })
+})
+
+test('el silencio suprime la señal y el movimiento reducido conserva la confirmación', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await installControlledAudioContext(page)
+  await interceptGitHub(page)
+  await page.goto('/pilot')
+  const audioControl = page.getByTestId('audio-control')
+  await audioControl.click()
+  await expect(audioControl).toHaveAttribute('data-audio-state', 'active')
+  await audioControl.click()
+  await expect(audioControl).toHaveAttribute('data-audio-state', 'muted')
+
+  await page.keyboard.press('f')
+  const effect = page.getByTestId('favorite-effect')
+  await expect(effect).toHaveAttribute('data-favorite-audio', 'muted')
+  await expect(effect).toHaveClass(/favorite-planet-effect--reduced-motion/)
+  await expect(effect.locator('.favorite-planet-effect__energy')).toHaveCSS('display', 'none')
+  await expect(page.getByTestId('favorite-feedback')).toContainText('Añadido a favoritos')
+  await expect(favoritesState(page)).toHaveAttribute('data-favorite-count', '1')
 })

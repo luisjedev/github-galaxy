@@ -33,6 +33,7 @@ import {
 import {
   useProceduralAudio,
   type AudioExperienceState,
+  type FavoriteCueResult,
 } from './hooks/use-procedural-audio'
 import type { ReactiveAudioState } from './platform/procedural-audio'
 import { validateGitHubUsername } from './domain/github-username'
@@ -507,6 +508,25 @@ function trapDialogFocus(event: ReactKeyboardEvent<HTMLElement>) {
   actions[shouldWrapBackward ? actions.length - 1 : 0].focus()
 }
 
+type FavoriteAction = 'added' | 'removed'
+type FavoriteVisualPhase = 'flash' | 'travel' | 'collapse'
+
+interface FavoriteOperation {
+  action: FavoriteAction | null
+  message: string
+  repository: FavoriteSnapshot | null
+}
+
+interface FavoriteEffect {
+  id: number
+  action: FavoriteAction
+  source: 'proximity' | 'menu'
+  repository: FavoriteSnapshot
+  phase: FavoriteVisualPhase
+  audio: FavoriteCueResult | 'pending'
+  menuTop?: number
+}
+
 const audioPresentation: Record<
   AudioExperienceState,
   { action: string; icon: string; status: string }
@@ -521,10 +541,12 @@ function FavoritesMenu({
   favorites,
   selectedRepositoryId,
   feedback,
+  effect,
 }: {
   favorites: FavoriteSnapshot[]
   selectedRepositoryId: number | null
   feedback: string | null
+  effect: FavoriteEffect | null
 }) {
   const rows = useRef(new Map<number, HTMLDivElement>())
 
@@ -549,6 +571,22 @@ function FavoritesMenu({
           </div>
           <strong aria-label={`${favorites.length} favoritos`}>{favorites.length}</strong>
         </header>
+        {effect?.source === 'menu' ? (
+          <div
+            className={`favorite-row favorite-row--departing favorite-row--${effect.phase}`}
+            aria-hidden="true"
+            data-favorite-action={effect.action}
+            data-favorite-phase={effect.phase}
+            data-favorite-audio={effect.audio}
+            data-repository-id={effect.repository.repositoryId}
+            style={effect.menuTop === undefined ? undefined : { top: effect.menuTop }}
+          >
+            <div className="favorite-row__heading">
+              <strong>{effect.repository.owner}/{effect.repository.name}</strong>
+              <span>Eliminando…</span>
+            </div>
+          </div>
+        ) : null}
         {favorites.length === 0 ? (
           <p className="favorites-empty" role="status" aria-label="Favoritos vacíos">
             Acércate a un planeta y pulsa F
@@ -616,6 +654,8 @@ function Exploration({
   audioState,
   onAudioToggle,
   onAudioUpdate,
+  onFavoriteCue,
+  onFavoriteCleanup,
   onTogglePause,
   onReturnToMenu,
   onSystemArrival,
@@ -632,6 +672,8 @@ function Exploration({
   audioState: AudioExperienceState
   onAudioToggle: () => void
   onAudioUpdate: (state: ReactiveAudioState) => void
+  onFavoriteCue: (action: FavoriteAction) => Promise<FavoriteCueResult>
+  onFavoriteCleanup: () => void
   onTogglePause: () => void
   onReturnToMenu: () => void
   onSystemArrival: (destination: GitHubSystem) => void
@@ -639,7 +681,7 @@ function Exploration({
   favoritesWarning: boolean
   selectedFavoriteId: number | null
   onSelectFavorite: (repositoryId: number | null) => void
-  onToggleFavorite: (repository: PlanetDescriptor['repository'] | null, owner: string) => string
+  onToggleFavorite: (repository: PlanetDescriptor['repository'] | null, owner: string) => FavoriteOperation
   onRemoveFavorite: (repositoryId: number) => void
 }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
@@ -678,15 +720,51 @@ function Exploration({
   const shipAppearance = describeShipAppearance(system)
   const [orientationMarkers, setOrientationMarkers] = useState<CelestialMarkerState[]>([])
   const [favoriteFeedback, setFavoriteFeedback] = useState<string | null>(null)
+  const [favoriteEffect, setFavoriteEffect] = useState<FavoriteEffect | null>(null)
   const favoriteFeedbackTimer = useRef<number | null>(null)
+  const favoriteEffectTimers = useRef<number[]>([])
+  const favoriteEffectId = useRef(0)
   const starMarker = orientationMarkers.find((marker) => marker.key === 'star')
   const starGuide = placeStarGuide(starMarker, window.innerWidth / window.innerHeight)
+  const favoriteMarker = favoriteEffect?.source === 'proximity'
+    ? orientationMarkers.find(
+        (marker) => marker.key === `planet:${favoriteEffect.repository.repositoryId}`,
+      )
+    : null
 
   useEffect(() => () => {
     if (favoriteFeedbackTimer.current !== null) {
       window.clearTimeout(favoriteFeedbackTimer.current)
     }
-  }, [])
+    for (const timer of favoriteEffectTimers.current) window.clearTimeout(timer)
+    onFavoriteCleanup()
+  }, [onFavoriteCleanup])
+
+  const startFavoriteEffect = (
+    action: FavoriteAction,
+    repository: FavoriteSnapshot,
+    source: 'proximity' | 'menu',
+    menuTop?: number,
+  ) => {
+    for (const timer of favoriteEffectTimers.current) window.clearTimeout(timer)
+    favoriteEffectTimers.current = []
+    const id = favoriteEffectId.current + 1
+    favoriteEffectId.current = id
+    setFavoriteEffect({ id, action, source, repository, phase: 'flash', audio: 'pending', menuTop })
+    void onFavoriteCue(action).then((audio) => {
+      setFavoriteEffect((current) => current?.id === id ? { ...current, audio } : current)
+    })
+    favoriteEffectTimers.current.push(
+      window.setTimeout(() => {
+        setFavoriteEffect((current) => current?.id === id
+          ? { ...current, phase: source === 'menu' ? 'collapse' : 'travel' }
+          : current)
+      }, 160),
+      window.setTimeout(() => {
+        setFavoriteEffect((current) => current?.id === id ? null : current)
+      }, 700),
+    )
+  }
 
   useEffect(() => {
     onAudioUpdate({
@@ -747,8 +825,16 @@ function Exploration({
           }
           const nextSelection = favorites[selectedIndex + 1] ?? favorites[selectedIndex - 1] ?? null
           onSelectFavorite(nextSelection?.repositoryId ?? null)
+          const selectedRow = experienceRef.current?.querySelector<HTMLElement>(
+            `.favorites-panel .favorite-row[data-repository-id="${selected.repositoryId}"]`,
+          )
+          const favoritesPanel = experienceRef.current?.querySelector<HTMLElement>('.favorites-panel')
+          const menuTop = selectedRow && favoritesPanel
+            ? selectedRow.getBoundingClientRect().top - favoritesPanel.getBoundingClientRect().top
+            : undefined
           onRemoveFavorite(selected.repositoryId)
-          setFavoriteMenuFeedback('Eliminado de favoritos')
+          setFavoriteMenuFeedback(`Eliminado de favoritos: ${selected.owner}/${selected.name}`)
+          startFavoriteEffect('removed', selected, 'menu', menuTop)
           return
         }
         if (key === 'm') {
@@ -764,11 +850,14 @@ function Exploration({
         if (key === 'f') {
           if (event.repeat || controlsBlocked || teleportPhase !== 'idle') return
           event.preventDefault()
-          const message = onToggleFavorite(
+          const operation = onToggleFavorite(
             activeBody?.kind === 'planet' ? activeBody.planet.repository : null,
             profile.login,
           )
-          setFavoriteFeedback(message)
+          setFavoriteFeedback(operation.message)
+          if (operation.action && operation.repository) {
+            startFavoriteEffect(operation.action, operation.repository, 'proximity')
+          }
           if (favoriteFeedbackTimer.current !== null) {
             window.clearTimeout(favoriteFeedbackTimer.current)
           }
@@ -822,6 +911,28 @@ function Exploration({
           </span>
         ))}
       </div>
+
+      {favoriteEffect?.source === 'proximity' ? (
+        <aside
+          className={`favorite-planet-effect favorite-planet-effect--${favoriteEffect.action}${visualSettings.reducedMotion ? ' favorite-planet-effect--reduced-motion' : ''}`}
+          role="status"
+          aria-label={`Efecto de favorito en ${favoriteEffect.repository.owner}/${favoriteEffect.repository.name}`}
+          data-testid="favorite-effect"
+          data-favorite-action={favoriteEffect.action}
+          data-favorite-phase={favoriteEffect.phase}
+          data-favorite-audio={favoriteEffect.audio}
+          data-repository-id={favoriteEffect.repository.repositoryId}
+          style={{
+            left: `${favoriteMarker?.screenPosition.x ?? 50}%`,
+            top: `${favoriteMarker?.screenPosition.y ?? 50}%`,
+            '--favorite-travel-x': `${50 - (favoriteMarker?.screenPosition.x ?? 50)}vw`,
+            '--favorite-travel-y': `${8 - (favoriteMarker?.screenPosition.y ?? 50)}vh`,
+          } as CSSProperties}
+        >
+          <span className="favorite-planet-effect__ring" aria-hidden="true" />
+          <span className="favorite-planet-effect__energy" aria-hidden="true" />
+        </aside>
+      ) : null}
 
       <aside
         className="star-guide"
@@ -961,7 +1072,11 @@ function Exploration({
             ? 'muted'
             : audioState !== 'active'
               ? 'silent'
-              : isWormholeTravelPhase(wormhole.phase)
+              : favoriteEffect?.audio === 'ascending'
+                ? 'favorite-added'
+                : favoriteEffect?.audio === 'descending'
+                  ? 'favorite-removed'
+                  : isWormholeTravelPhase(wormhole.phase)
                 ? 'wormhole'
                 : teleportPhase === 'charging'
                 ? 'teleport-charge'
@@ -1137,6 +1252,7 @@ function Exploration({
           favorites={favorites}
           selectedRepositoryId={selectedFavoriteId}
           feedback={favoriteMenuFeedback}
+          effect={favoriteEffect}
         />
       ) : null}
 
@@ -1332,12 +1448,16 @@ function AppView({
   onAudioActivation,
   onAudioToggle,
   onAudioUpdate,
+  onFavoriteCue,
+  onFavoriteCleanup,
 }: {
   initialState?: AppState
   audioState: AudioExperienceState
   onAudioActivation: () => void
   onAudioToggle: () => void
   onAudioUpdate: (state: ReactiveAudioState) => void
+  onFavoriteCue: (action: FavoriteAction) => Promise<FavoriteCueResult>
+  onFavoriteCleanup: () => void
 }) {
   const [state, dispatch] = useReducer(transitionAppState, initialState)
   const [recentLogins, setRecentLogins] = useState<string[]>([])
@@ -1427,6 +1547,8 @@ function AppView({
           audioState={audioState}
           onAudioToggle={onAudioToggle}
           onAudioUpdate={onAudioUpdate}
+          onFavoriteCue={onFavoriteCue}
+          onFavoriteCleanup={onFavoriteCleanup}
           onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
           onReturnToMenu={returnToMenu}
           favorites={favorites}
@@ -1434,12 +1556,25 @@ function AppView({
           selectedFavoriteId={selectedFavoriteId}
           onSelectFavorite={setSelectedFavoriteId}
           onToggleFavorite={(repository, owner) => {
-            if (!repository) return 'Acércate a un planeta para añadirlo a favoritos'
-            const wasFavorite = favorites.some(
+            if (!repository) return {
+              action: null,
+              message: 'Acércate a un planeta para añadirlo a favoritos',
+              repository: null,
+            }
+            const previous = favorites.find(
               (favorite) => favorite.repositoryId === repository.id,
             )
-            applyFavoriteResult(favoriteStore.toggle(repository, owner))
-            return wasFavorite ? 'Eliminado de favoritos' : 'Añadido a favoritos'
+            const result = favoriteStore.toggle(repository, owner)
+            const action = previous ? 'removed' : 'added'
+            const snapshot = previous ?? result.favorites.find(
+              (favorite) => favorite.repositoryId === repository.id,
+            ) ?? null
+            applyFavoriteResult(result)
+            return {
+              action,
+              repository: snapshot,
+              message: `${action === 'added' ? 'Añadido a' : 'Eliminado de'} favoritos: ${owner}/${repository.name}`,
+            }
           }}
           onRemoveFavorite={(repositoryId) => {
             applyFavoriteResult(favoriteStore.remove(repositoryId))
@@ -1496,6 +1631,8 @@ export default function App() {
           onAudioActivation={() => void audio.activate()}
           onAudioToggle={audio.toggleMuted}
           onAudioUpdate={audio.update}
+          onFavoriteCue={audio.playFavoriteCue}
+          onFavoriteCleanup={audio.cancelFavoriteCues}
         />
       )}
     </div>
