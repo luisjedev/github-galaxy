@@ -139,9 +139,10 @@ function TurboSpeedLines({
     const positions = new Float32Array(profile.speedLineCount * 6)
     for (let index = 0; index < profile.speedLineCount; index += 1) {
       const angle = deterministicUnit(hue, index, 10) * Math.PI * 2
-      const radius = 2.4 + deterministicUnit(hue, index, 11) * 5.8
+      // Fill the chase-camera frustum instead of clustering the streaks around the ship.
+      const radius = 3.2 + deterministicUnit(hue, index, 11) * 20.8
       const x = Math.cos(angle) * radius
-      const y = Math.sin(angle) * radius * 0.56
+      const y = Math.sin(angle) * radius * 0.88
       const z = -13 + deterministicUnit(hue, index, 12) * 22
       const length = 0.9 + deterministicUnit(hue, index, 13) * 3.4
       positions.set([x, y, z, x, y, z - length], index * 6)
@@ -164,7 +165,7 @@ function TurboSpeedLines({
       position.setZ(index + 1, z - length)
     }
     position.needsUpdate = true
-    if (material.current) material.current.opacity = intensity * 0.72
+    if (material.current) material.current.opacity = intensity * 0.5
     if (lines.current) lines.current.visible = enabled && intensity > 0.01
   })
 
@@ -178,7 +179,7 @@ function TurboSpeedLines({
     >
       <lineBasicMaterial
         ref={material}
-        color={hsl((hue + 18) % 360, 100, 82)}
+        color="#ffffff"
         transparent
         opacity={0}
         depthWrite={false}

@@ -6,11 +6,11 @@ import {
 } from './turbo-visual'
 
 describe('feedback visual del turbo', () => {
-  test('distingue el turbo normal con una capa densa de rayas y partículas reutilizables', () => {
+  test('distingue el turbo normal con rayas dispersas y partículas reutilizables', () => {
     const profile = turboVisualProfile('normal', false)
 
     expect(profile).toEqual({
-      speedLineCount: 36,
+      speedLineCount: 24,
       particleCount: 72,
       maximumIntensity: 1,
       motionScale: 1,

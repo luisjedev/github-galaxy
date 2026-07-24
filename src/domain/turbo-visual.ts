@@ -32,7 +32,7 @@ export function turboVisualProfile(
 ): TurboVisualProfile {
   if (quality === 'normal' && !reducedMotion) {
     return {
-      speedLineCount: 36,
+      speedLineCount: 24,
       particleCount: 72,
       maximumIntensity: 1,
       motionScale: 1,
@@ -42,7 +42,7 @@ export function turboVisualProfile(
 
   if (quality === 'reduced' && reducedMotion) {
     return {
-      speedLineCount: 10,
+      speedLineCount: 7,
       particleCount: 24,
       maximumIntensity: 0.4,
       motionScale: 0.35,
@@ -52,14 +52,14 @@ export function turboVisualProfile(
 
   return quality === 'reduced'
     ? {
-        speedLineCount: 18,
+        speedLineCount: 12,
         particleCount: 42,
         maximumIntensity: 0.78,
         motionScale: 0.82,
         feedback: 'attenuated',
       }
     : {
-        speedLineCount: 14,
+        speedLineCount: 9,
         particleCount: 36,
         maximumIntensity: 0.52,
         motionScale: 0.42,
