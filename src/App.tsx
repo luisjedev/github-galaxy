@@ -909,6 +909,51 @@ function Exploration({
         cameraTransitionId={cameraTransitionId}
       />
 
+      <aside
+        className="cockpit-overlay"
+        data-testid="cockpit"
+        hidden={cameraMode !== 'first-person'}
+        aria-label="Cabina de pilotaje procedural"
+        data-cockpit-components="glass,frames,dashboard,controls,nose,wings"
+        data-interior-coverage="0.28"
+        data-exterior-composition="controlled"
+        data-occupant="none"
+        data-primary-hue={shipAppearance.primaryHue}
+        data-accent-hue={shipAppearance.accentHue}
+        data-geometry-detail={visualSettings.quality === 'normal' ? 'full' : 'simplified'}
+        data-speed={flight.speed.toFixed(1)}
+        data-altitude={Math.round(flight.altitude)}
+        data-turbo={flight.turbo ? 'active' : 'idle'}
+        style={{
+          '--cockpit-primary': `hsl(${shipAppearance.primaryHue} 58% 34%)`,
+          '--cockpit-accent': `hsl(${shipAppearance.accentHue} 100% 68%)`,
+        } as CSSProperties}
+      >
+        <span className="cockpit-overlay__glass" aria-hidden="true" />
+        <span className="cockpit-overlay__frame cockpit-overlay__frame--left" aria-hidden="true" />
+        <span className="cockpit-overlay__frame cockpit-overlay__frame--right" aria-hidden="true" />
+        <div className="cockpit-overlay__dashboard">
+          <span className="cockpit-overlay__control" aria-hidden="true" />
+          <output className="cockpit-instrument" aria-label="Velocidad de la nave">
+            <small>Velocidad</small>
+            <strong>{flight.speed.toFixed(1)}</strong>
+          </output>
+          <output className="cockpit-instrument" aria-label="Altitud de la nave">
+            <small>Altitud</small>
+            <strong>{Math.round(flight.altitude)}</strong>
+          </output>
+          <output
+            className="cockpit-instrument cockpit-instrument--turbo"
+            aria-label="Estado del turbo"
+            data-active={flight.turbo}
+          >
+            <small>Turbo</small>
+            <strong>{flight.turbo ? 'Activo' : 'Listo'}</strong>
+          </output>
+          <span className="cockpit-overlay__control" aria-hidden="true" />
+        </div>
+      </aside>
+
       <div className="celestial-markers" aria-label="Marcadores de cuerpos celestes">
         {orientationMarkers.map((marker) => (
           <span
@@ -1125,11 +1170,14 @@ function Exploration({
         data-speed={flight.speed.toFixed(3)}
         data-turbo={flight.turbo}
         data-atmosphere-contact={atmosphereContact?.key ?? 'none'}
+        data-presentation={cameraMode === 'first-person' ? 'instrumentation-only' : 'exterior-hud'}
         aria-label="Estado de navegación"
       >
-        <span>Velocidad {flight.speed.toFixed(1)}</span>
-        <span>Altitud {Math.round(flight.altitude)}</span>
-        <strong>{flight.turbo ? 'Turbo activo' : 'Impulso normal'}</strong>
+        <span className="flight-hud__readout" hidden={cameraMode === 'first-person'}>
+          <span>Velocidad {flight.speed.toFixed(1)}</span>
+          <span>Altitud {Math.round(flight.altitude)}</span>
+          <strong>{flight.turbo ? 'Turbo activo' : 'Impulso normal'}</strong>
+        </span>
       </output>
 
       {teleportPhase !== 'idle' ? (

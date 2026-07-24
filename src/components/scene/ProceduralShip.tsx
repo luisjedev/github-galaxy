@@ -481,6 +481,7 @@ export function ProceduralShip({
   quality,
   reducedMotion,
   effectsEnabled,
+  visible = true,
 }: {
   flightRef: RefObject<FlightState>
   primaryHue: number
@@ -488,6 +489,7 @@ export function ProceduralShip({
   quality: VisualQuality
   reducedMotion: boolean
   effectsEnabled: boolean
+  visible?: boolean
 }) {
   const ship = useRef<Group>(null)
   const attitude = useRef<Group>(null)
@@ -514,7 +516,7 @@ export function ProceduralShip({
   }, -50)
 
   return (
-    <group ref={ship} scale={SHIP_WORLD_SCALE}>
+    <group ref={ship} scale={SHIP_WORLD_SCALE} visible={visible}>
       <group ref={attitude}>
         {/* Long faceted fuselage and reinforced reactor section. */}
         <mesh

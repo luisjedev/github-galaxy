@@ -24,6 +24,7 @@ import type { VisualSettings } from '../platform/visual-settings'
 import { turboVisualProfile } from '../domain/turbo-visual'
 import { OrbitingPlanet } from './scene/ProceduralPlanet'
 import { ProceduralShip, SHIP_WORLD_SCALE } from './scene/ProceduralShip'
+import { ProceduralCockpit } from './scene/ProceduralCockpit'
 import { ProceduralStar } from './scene/ProceduralStar'
 import { OrbitalRockEnvironment } from './scene/OrbitalDetails'
 import { SpaceBackground } from './scene/SpaceBackground'
@@ -368,6 +369,14 @@ function SystemScene({
         quality={settings.quality}
         reducedMotion={settings.reducedMotion}
         effectsEnabled={effectsEnabled}
+        visible={cameraMode === 'third-person'}
+      />
+      <ProceduralCockpit
+        flightRef={flightRef}
+        primaryHue={shipAppearance.primaryHue}
+        accentHue={shipAppearance.accentHue}
+        quality={settings.quality}
+        visible={cameraMode === 'first-person'}
       />
       <FlightCamera
         flightRef={flightRef}
@@ -415,6 +424,16 @@ export const GalaxyScene = memo(function GalaxyScene({
   const [completedCameraTransition, setCompletedCameraTransition] = useState(cameraTransitionId)
   const cameraTransitioning =
     !settings.reducedMotion && completedCameraTransition !== cameraTransitionId
+
+  useEffect(() => {
+    if (completedCameraTransition === cameraTransitionId || settings.reducedMotion) return
+    const completionTimer = window.setTimeout(
+      () => setCompletedCameraTransition(cameraTransitionId),
+      CAMERA_TRANSITION_MILLISECONDS,
+    )
+    return () => window.clearTimeout(completionTimer)
+  }, [cameraTransitionId, completedCameraTransition, settings.reducedMotion])
+
   const turboProfile = useMemo(
     () => turboVisualProfile(settings.quality, settings.reducedMotion),
     [settings.quality, settings.reducedMotion],
@@ -463,6 +482,13 @@ export const GalaxyScene = memo(function GalaxyScene({
       data-turbo-particle-count={turboProfile.particleCount}
       data-turbo-feedback={turboProfile.feedback}
     >
+      <span
+        className="scene-observability"
+        data-testid="exterior-ship-state"
+        data-visible={cameraMode === 'third-person'}
+      >
+        Nave exterior {cameraMode === 'third-person' ? 'visible' : 'oculta'}
+      </span>
       <Canvas
         frameloop={paused ? 'never' : 'always'}
         camera={{
@@ -472,7 +498,7 @@ export const GalaxyScene = memo(function GalaxyScene({
             initialFlight.z - Math.cos(initialFlight.heading) * CHASE_CAMERA_BACK_DISTANCE,
           ],
           fov: 64,
-          near: 0.1,
+          near: 0.008,
           far: farPlane,
         }}
         dpr={settings.dpr}
