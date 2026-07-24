@@ -1,9 +1,11 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { memo, useMemo, useRef, type RefObject } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   ACESFilmicToneMapping,
+  Euler,
   Frustum,
   Matrix4,
+  Quaternion,
   Sphere,
   SRGBColorSpace,
   Vector3,
@@ -28,6 +30,7 @@ import { SpaceBackground } from './scene/SpaceBackground'
 import { hsl } from './scene/visual-utils'
 
 export type CelestialMarkerStatus = 'visible' | 'offscreen' | 'behind'
+export type CameraMode = 'first-person' | 'third-person'
 
 interface Point2D {
   x: number
@@ -51,6 +54,11 @@ const CHASE_CAMERA_BACK_DISTANCE = 0.85 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_HEIGHT = 0.22 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_LOOK_DISTANCE = 7 * SHIP_CAMERA_COMPOSITION_SCALE
 const CHASE_CAMERA_LOOK_HEIGHT = 0.05 * SHIP_CAMERA_COMPOSITION_SCALE
+const COCKPIT_CAMERA_HEIGHT = 0.028
+const COCKPIT_CAMERA_FORWARD = 0.045
+const FIRST_PERSON_ATTITUDE_SCALE = 0.3
+const CAMERA_TRANSITION_MILLISECONDS = 400
+const CAMERA_TRANSITION_CLEARANCE = 0.05
 
 function planetMarkerDiscoveryRadius(planetRadius: number): number {
   return planetRadius + PLANET_MARKER_DISCOVERY_CLEARANCE
@@ -67,11 +75,42 @@ function FlightSimulation({
   return null
 }
 
-function ChaseCamera({ flightRef }: { flightRef: FlightStateRef }) {
+function FlightCamera({
+  flightRef,
+  mode,
+  transitionRequested,
+  onTransitionComplete,
+}: {
+  flightRef: FlightStateRef
+  mode: CameraMode
+  transitionRequested: boolean
+  onTransitionComplete: () => void
+}) {
   const { camera } = useThree()
   const desiredPosition = useRef(new Vector3())
   const lookAt = useRef(new Vector3())
+  const shipPosition = useRef(new Vector3())
+  const forward = useRef(new Vector3())
+  const up = useRef(new Vector3())
+  const targetQuaternion = useRef(new Quaternion())
+  const attitudeEuler = useRef(new Euler())
+  const attitudeQuaternion = useRef(new Quaternion())
+  const lookMatrix = useRef(new Matrix4())
   const cameraPitch = useRef(0)
+  const transition = useRef<{
+    startedAt: number
+    position: Vector3
+    quaternion: Quaternion
+  } | null>(null)
+
+  useEffect(() => {
+    if (!transitionRequested) return
+    transition.current = {
+      startedAt: performance.now(),
+      position: camera.position.clone(),
+      quaternion: camera.quaternion.clone(),
+    }
+  }, [camera, mode, transitionRequested])
 
   useFrame((_, elapsedSeconds) => {
     const flight = flightRef.current
@@ -80,25 +119,72 @@ function ChaseCamera({ flightRef }: { flightRef: FlightStateRef }) {
     cameraPitch.current +=
       (targetPitch - cameraPitch.current) * (1 - Math.exp(-4 * frameSeconds))
 
-    const horizontalForward = Math.cos(cameraPitch.current)
-    const forwardX = Math.sin(flight.heading) * horizontalForward
-    const forwardY = -Math.sin(cameraPitch.current)
-    const forwardZ = Math.cos(flight.heading) * horizontalForward
-    desiredPosition.current.set(
-      flight.x - forwardX * CHASE_CAMERA_BACK_DISTANCE,
-      flight.altitude + CHASE_CAMERA_HEIGHT - forwardY * CHASE_CAMERA_BACK_DISTANCE,
-      flight.z - forwardZ * CHASE_CAMERA_BACK_DISTANCE,
-    )
-    camera.position.lerp(
-      desiredPosition.current,
-      1 - Math.exp(-7 * frameSeconds),
-    )
-    lookAt.current.set(
-      flight.x + forwardX * CHASE_CAMERA_LOOK_DISTANCE,
-      flight.altitude + CHASE_CAMERA_LOOK_HEIGHT + forwardY * CHASE_CAMERA_LOOK_DISTANCE,
-      flight.z + forwardZ * CHASE_CAMERA_LOOK_DISTANCE,
-    )
-    camera.lookAt(lookAt.current)
+    if (mode === 'first-person') {
+      attitudeEuler.current.set(
+        flight.pitch * FIRST_PERSON_ATTITUDE_SCALE,
+        flight.heading,
+        flight.bank * FIRST_PERSON_ATTITUDE_SCALE,
+        'YXZ',
+      )
+      attitudeQuaternion.current.setFromEuler(attitudeEuler.current)
+      forward.current.set(0, 0, 1).applyQuaternion(attitudeQuaternion.current)
+      up.current.set(0, 1, 0).applyQuaternion(attitudeQuaternion.current)
+      shipPosition.current.set(flight.x, flight.altitude, flight.z)
+      desiredPosition.current
+        .set(0, COCKPIT_CAMERA_HEIGHT, COCKPIT_CAMERA_FORWARD)
+        .applyQuaternion(attitudeQuaternion.current)
+        .add(shipPosition.current)
+      lookAt.current.copy(desiredPosition.current).add(forward.current)
+    } else {
+      const horizontalForward = Math.cos(cameraPitch.current)
+      forward.current.set(
+        Math.sin(flight.heading) * horizontalForward,
+        -Math.sin(cameraPitch.current),
+        Math.cos(flight.heading) * horizontalForward,
+      )
+      up.current.set(0, 1, 0)
+      desiredPosition.current.set(
+        flight.x - forward.current.x * CHASE_CAMERA_BACK_DISTANCE,
+        flight.altitude + CHASE_CAMERA_HEIGHT - forward.current.y * CHASE_CAMERA_BACK_DISTANCE,
+        flight.z - forward.current.z * CHASE_CAMERA_BACK_DISTANCE,
+      )
+      lookAt.current.set(
+        flight.x + forward.current.x * CHASE_CAMERA_LOOK_DISTANCE,
+        flight.altitude + CHASE_CAMERA_LOOK_HEIGHT + forward.current.y * CHASE_CAMERA_LOOK_DISTANCE,
+        flight.z + forward.current.z * CHASE_CAMERA_LOOK_DISTANCE,
+      )
+    }
+    lookMatrix.current.lookAt(desiredPosition.current, lookAt.current, up.current)
+    targetQuaternion.current.setFromRotationMatrix(lookMatrix.current)
+
+    const activeTransition = transition.current
+    if (activeTransition) {
+      const progress = Math.min(
+        1,
+        (performance.now() - activeTransition.startedAt) / CAMERA_TRANSITION_MILLISECONDS,
+      )
+      const eased = progress * progress * (3 - 2 * progress)
+      camera.position.lerpVectors(activeTransition.position, desiredPosition.current, eased)
+      camera.position.set(
+        camera.position.x,
+        camera.position.y + Math.sin(Math.PI * eased) * CAMERA_TRANSITION_CLEARANCE,
+        camera.position.z,
+      )
+      camera.quaternion.copy(activeTransition.quaternion).slerp(targetQuaternion.current, eased)
+      if (progress >= 1) {
+        transition.current = null
+        onTransitionComplete()
+      }
+      return
+    }
+
+    if (mode === 'third-person') {
+      camera.position.lerp(desiredPosition.current, 1 - Math.exp(-7 * frameSeconds))
+      camera.quaternion.slerp(targetQuaternion.current, 1 - Math.exp(-10 * frameSeconds))
+    } else {
+      camera.position.copy(desiredPosition.current)
+      camera.quaternion.copy(targetQuaternion.current)
+    }
   }, -40)
 
   return null
@@ -214,6 +300,9 @@ function SystemScene({
   settings,
   orbitalVisual,
   effectsEnabled,
+  cameraMode,
+  cameraTransitionRequested,
+  onCameraTransitionComplete,
 }: {
   system: GitHubSystem
   flightRef: FlightStateRef
@@ -223,6 +312,9 @@ function SystemScene({
   settings: VisualSettings
   orbitalVisual: SystemOrbitalVisual
   effectsEnabled: boolean
+  cameraMode: CameraMode
+  cameraTransitionRequested: boolean
+  onCameraTransitionComplete: () => void
 }) {
   const { starAppearance, planets } = system
   const extent = Math.max(20, orbitalVisual.asteroidBelt.outerRadius)
@@ -277,7 +369,12 @@ function SystemScene({
         reducedMotion={settings.reducedMotion}
         effectsEnabled={effectsEnabled}
       />
-      <ChaseCamera flightRef={flightRef} />
+      <FlightCamera
+        flightRef={flightRef}
+        mode={cameraMode}
+        transitionRequested={cameraTransitionRequested}
+        onTransitionComplete={onCameraTransitionComplete}
+      />
       <OrientationTracker
         system={system}
         flightRef={flightRef}
@@ -299,6 +396,8 @@ export const GalaxyScene = memo(function GalaxyScene({
   settings,
   orbitalVisual,
   turboActive,
+  cameraMode,
+  cameraTransitionId,
 }: {
   system: GitHubSystem
   initialFlight: FlightState
@@ -310,7 +409,12 @@ export const GalaxyScene = memo(function GalaxyScene({
   settings: VisualSettings
   orbitalVisual: SystemOrbitalVisual
   turboActive: boolean
+  cameraMode: CameraMode
+  cameraTransitionId: number
 }) {
+  const [completedCameraTransition, setCompletedCameraTransition] = useState(cameraTransitionId)
+  const cameraTransitioning =
+    !settings.reducedMotion && completedCameraTransition !== cameraTransitionId
   const turboProfile = useMemo(
     () => turboVisualProfile(settings.quality, settings.reducedMotion),
     [settings.quality, settings.reducedMotion],
@@ -330,7 +434,14 @@ export const GalaxyScene = memo(function GalaxyScene({
     <div
       className="galaxy-canvas"
       role="img"
-      aria-label="Escena tridimensional con cámara automática siguiendo la nave"
+      aria-label={cameraMode === 'first-person'
+        ? 'Escena tridimensional desde el puesto de pilotaje'
+        : 'Escena tridimensional con cámara automática siguiendo la nave'}
+      data-testid="active-camera"
+      data-camera-mode={cameraMode}
+      data-camera-transition={cameraTransitioning ? 'active' : 'idle'}
+      data-camera-transition-ms={settings.reducedMotion ? 0 : CAMERA_TRANSITION_MILLISECONDS}
+      data-camera-attitude-scale={cameraMode === 'first-person' ? FIRST_PERSON_ATTITUDE_SCALE : 0}
       data-visual-quality={settings.quality}
       data-reduced-motion={settings.reducedMotion}
       data-visual-seed={system.starSeed}
@@ -386,6 +497,9 @@ export const GalaxyScene = memo(function GalaxyScene({
           settings={settings}
           orbitalVisual={orbitalVisual}
           effectsEnabled={!paused}
+          cameraMode={cameraMode}
+          cameraTransitionRequested={cameraTransitioning}
+          onCameraTransitionComplete={() => setCompletedCameraTransition(cameraTransitionId)}
         />
       </Canvas>
     </div>

@@ -29,6 +29,7 @@ import { type GitHubSystem, type PlanetDescriptor } from './domain/github-system
 import {
   GalaxyScene,
   SHIP_WORLD_SCALE,
+  type CameraMode,
   type CelestialMarkerState,
 } from './components/GalaxyScene'
 import {
@@ -62,6 +63,7 @@ const controls = [
   ['A / D', 'Girar a la izquierda · derecha'],
   ['J / K', 'Inclinar abajo · arriba (combinar con W / S)'],
   ['Espacio', 'Turbo'],
+  ['C', 'Cambiar cámara'],
   ['E', 'Abrir destino'],
   ['F', 'Añadir · quitar planeta favorito'],
   ['M', 'Abrir favoritos'],
@@ -666,6 +668,9 @@ function Exploration({
   onSelectFavorite,
   onToggleFavorite,
   onRemoveFavorite,
+  cameraMode,
+  cameraTransitionId,
+  onCameraModeChange,
 }: {
   system: GitHubSystem
   paused: boolean
@@ -684,6 +689,9 @@ function Exploration({
   onSelectFavorite: (repositoryId: number | null) => void
   onToggleFavorite: (repository: PlanetDescriptor['repository'] | null, owner: string) => FavoriteOperation
   onRemoveFavorite: (repositoryId: number) => void
+  cameraMode: CameraMode
+  cameraTransitionId: number
+  onCameraModeChange: (mode: CameraMode) => void
 }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
   const [visualSettings] = useState(readVisualSettings)
@@ -838,6 +846,12 @@ function Exploration({
           startFavoriteEffect('removed', selected, 'menu', menuTop)
           return
         }
+        if (key === 'c') {
+          if (event.repeat || paused || controlsBlocked || teleportPhase !== 'idle' || wormhole.phase !== 'idle') return
+          event.preventDefault()
+          onCameraModeChange(cameraMode === 'third-person' ? 'first-person' : 'third-person')
+          return
+        }
         if (key === 'm') {
           if (event.repeat || paused || controlsBlocked || teleportPhase !== 'idle' || wormhole.phase !== 'idle') return
           event.preventDefault()
@@ -891,6 +905,8 @@ function Exploration({
         settings={visualSettings}
         orbitalVisual={orbitalVisual}
         turboActive={isTurboVisualActive(flight, !controlsBlocked)}
+        cameraMode={cameraMode}
+        cameraTransitionId={cameraTransitionId}
       />
 
       <div className="celestial-markers" aria-label="Marcadores de cuerpos celestes">
@@ -1463,6 +1479,8 @@ function AppView({
 }) {
   const [state, dispatch] = useReducer(transitionAppState, initialState)
   const [recentLogins, setRecentLogins] = useState<string[]>([])
+  const [cameraMode, setCameraMode] = useState<CameraMode>('third-person')
+  const [cameraTransitionId, setCameraTransitionId] = useState(0)
   const [favoriteStore] = useState(() => createFavoriteStore(() => window.localStorage))
   const [favorites, setFavorites] = useState(favoriteStore.initial.favorites)
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<number | null>(
@@ -1511,6 +1529,7 @@ function AppView({
   }, [applyFavoriteResult, favoriteStore, isRandomLoading, loadingUsername])
 
   const returnToMenu = () => {
+    setCameraMode('third-person')
     clearUserPath()
     dispatch({ type: 'RETURN_TO_MENU' })
   }
@@ -1580,6 +1599,12 @@ function AppView({
           }}
           onRemoveFavorite={(repositoryId) => {
             applyFavoriteResult(favoriteStore.remove(repositoryId))
+          }}
+          cameraMode={cameraMode}
+          cameraTransitionId={cameraTransitionId}
+          onCameraModeChange={(mode) => {
+            setCameraMode(mode)
+            setCameraTransitionId((current) => current + 1)
           }}
           onSystemArrival={(destination) => {
             if (state.name !== 'exploration' && state.name !== 'pause') return
