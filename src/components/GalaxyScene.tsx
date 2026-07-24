@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { memo, useRef, type RefObject } from 'react'
+import { memo, useMemo, useRef, type RefObject } from 'react'
 import {
   ACESFilmicToneMapping,
   Frustum,
@@ -19,6 +19,7 @@ import {
 } from '../domain/github-system'
 import type { SystemOrbitalVisual } from '../domain/orbital-generation'
 import type { VisualSettings } from '../platform/visual-settings'
+import { turboVisualProfile } from '../domain/turbo-visual'
 import { OrbitingPlanet } from './scene/ProceduralPlanet'
 import { ProceduralShip, SHIP_WORLD_SCALE } from './scene/ProceduralShip'
 import { ProceduralStar } from './scene/ProceduralStar'
@@ -212,6 +213,7 @@ function SystemScene({
   onMarkersChange,
   settings,
   orbitalVisual,
+  effectsEnabled,
 }: {
   system: GitHubSystem
   flightRef: FlightStateRef
@@ -220,6 +222,7 @@ function SystemScene({
   onMarkersChange: (markers: CelestialMarkerState[]) => void
   settings: VisualSettings
   orbitalVisual: SystemOrbitalVisual
+  effectsEnabled: boolean
 }) {
   const { starAppearance, planets } = system
   const extent = Math.max(20, orbitalVisual.asteroidBelt.outerRadius)
@@ -270,6 +273,9 @@ function SystemScene({
         flightRef={flightRef}
         primaryHue={shipAppearance.primaryHue}
         accentHue={shipAppearance.accentHue}
+        quality={settings.quality}
+        reducedMotion={settings.reducedMotion}
+        effectsEnabled={effectsEnabled}
       />
       <ChaseCamera flightRef={flightRef} />
       <OrientationTracker
@@ -292,6 +298,7 @@ export const GalaxyScene = memo(function GalaxyScene({
   paused,
   settings,
   orbitalVisual,
+  turboActive,
 }: {
   system: GitHubSystem
   initialFlight: FlightState
@@ -302,7 +309,12 @@ export const GalaxyScene = memo(function GalaxyScene({
   paused: boolean
   settings: VisualSettings
   orbitalVisual: SystemOrbitalVisual
+  turboActive: boolean
 }) {
+  const turboProfile = useMemo(
+    () => turboVisualProfile(settings.quality, settings.reducedMotion),
+    [settings.quality, settings.reducedMotion],
+  )
   const farPlane = Math.max(220, orbitalVisual.asteroidBelt.outerRadius * 4)
   const moonCount = orbitalVisual.planets.reduce(
     (total, planet) => total + planet.visual.moons.length,
@@ -335,6 +347,10 @@ export const GalaxyScene = memo(function GalaxyScene({
       data-asteroid-belt-outer-radius={orbitalVisual.asteroidBelt.outerRadius}
       data-shooting-star-event-count={orbitalVisual.shootingStars.length}
       data-simulation-state={paused ? 'paused' : 'running'}
+      data-turbo-visual-state={turboActive ? 'active' : 'idle'}
+      data-turbo-speed-line-count={turboProfile.speedLineCount}
+      data-turbo-particle-count={turboProfile.particleCount}
+      data-turbo-feedback={turboProfile.feedback}
     >
       <Canvas
         frameloop={paused ? 'never' : 'always'}
@@ -369,6 +385,7 @@ export const GalaxyScene = memo(function GalaxyScene({
           onMarkersChange={onMarkersChange}
           settings={settings}
           orbitalVisual={orbitalVisual}
+          effectsEnabled={!paused}
         />
       </Canvas>
     </div>

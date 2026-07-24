@@ -13,6 +13,10 @@ import {
   Vector3,
 } from 'three'
 import type { FlightState } from '../../domain/flight'
+import {
+  advanceTurboVisualIntensity,
+  isTurboVisualActive,
+} from '../../domain/turbo-visual'
 import type { ShootingStarEventVisual } from '../../domain/orbital-generation'
 import {
   generateSpaceVisual,
@@ -355,6 +359,7 @@ function LocalDust({
   const speeds = useMemo(() => visual.dust.map((point) => point.speed), [visual.dust])
   const geometryRef = useRef(geometry)
   const points = useRef<Points>(null)
+  const turboIntensity = useRef(0)
 
   useEffect(() => {
     geometryRef.current = geometry
@@ -368,7 +373,14 @@ function LocalDust({
     }
     const position = geometryRef.current.getAttribute('position') as BufferAttribute
     const motionScale = reducedMotion ? 0.28 : 1
-    const flightMotion = (Math.abs(flight.speed) * 3.2 + (flight.turbo ? 7 : 0.18)) * motionScale
+    const targetTurbo = isTurboVisualActive(flight, true) ? (reducedMotion ? 0.45 : 1) : 0
+    turboIntensity.current = advanceTurboVisualIntensity(
+      turboIntensity.current,
+      targetTurbo,
+      elapsedSeconds,
+    )
+    const flightMotion =
+      (Math.abs(flight.speed) * 3.2 + 0.18 + turboIntensity.current * 6.82) * motionScale
     const direction = flight.speed < 0 ? -1 : 1
     for (let index = 0; index < position.count; index += 1) {
       let nextZ = position.getZ(index) - flightMotion * speeds[index] * elapsedSeconds * direction

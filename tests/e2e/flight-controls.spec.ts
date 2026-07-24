@@ -215,6 +215,9 @@ test('mantener Espacio activa el turbo sin desplazar el navegador cuando la expe
     document.body.style.height = '300vh'
   })
   await page.locator('[data-app-state="exploration"]').focus()
+  const turboVisuals = page.locator('.galaxy-canvas')
+  await expect(turboVisuals).toHaveAttribute('data-turbo-visual-state', 'idle')
+  await expect(turboVisuals).toHaveAttribute('data-turbo-speed-line-count', /^(?:1[0-9]|[2-9][0-9])$/)
   const initialScroll = await page.evaluate(() => window.scrollY)
   const initialHeading = await numberAttribute(page, 'data-heading')
 
@@ -227,10 +230,22 @@ test('mantener Espacio activa el turbo sin desplazar el navegador cuando la expe
   await page.keyboard.down('w')
   await page.keyboard.down(' ')
   await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'true')
+  await expect(turboVisuals).toHaveAttribute('data-turbo-visual-state', 'active')
   await expect.poll(async () => await numberAttribute(page, 'data-speed')).toBeGreaterThan(0.5)
   expect(await page.evaluate(() => window.scrollY)).toBe(initialScroll)
 
   await page.keyboard.up(' ')
   await page.keyboard.up('w')
   await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'false')
+  await expect(turboVisuals).toHaveAttribute('data-turbo-visual-state', 'idle')
+
+  await page.keyboard.down('w')
+  await page.keyboard.down(' ')
+  await expect(turboVisuals).toHaveAttribute('data-turbo-visual-state', 'active')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-app-state="pause"]')).toBeVisible()
+  await expect(page.getByTestId('flight-state')).toHaveAttribute('data-turbo', 'false')
+  await expect(turboVisuals).toHaveAttribute('data-turbo-visual-state', 'idle')
+  await page.keyboard.up(' ')
+  await page.keyboard.up('w')
 })

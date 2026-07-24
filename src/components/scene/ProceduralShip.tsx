@@ -6,13 +6,21 @@ import {
   BufferGeometry,
   Float32BufferAttribute,
   Group,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
   PointLight,
   ShaderMaterial,
 } from 'three'
 import { NORMAL_FLIGHT_SPEED, type FlightState } from '../../domain/flight'
-import { deterministicUnit } from '../../domain/visual-generation'
+import {
+  advanceTurboVisualIntensity,
+  isTurboVisualActive,
+  turboVisualProfile,
+  type TurboVisualProfile,
+} from '../../domain/turbo-visual'
+import { deterministicUnit, type VisualQuality } from '../../domain/visual-generation'
 import { colorFromHsl, hsl } from './visual-utils'
 
 export const SHIP_WORLD_SCALE = 0.03
@@ -114,15 +122,86 @@ function SweptWing({
   )
 }
 
+function TurboSpeedLines({
+  hue,
+  profile,
+  intensityRef,
+  enabled,
+}: {
+  hue: number
+  profile: TurboVisualProfile
+  intensityRef: RefObject<number>
+  enabled: boolean
+}) {
+  const lines = useRef<LineSegments>(null)
+  const material = useRef<LineBasicMaterial>(null)
+  const geometry = useMemo(() => {
+    const positions = new Float32Array(profile.speedLineCount * 6)
+    for (let index = 0; index < profile.speedLineCount; index += 1) {
+      const angle = deterministicUnit(hue, index, 10) * Math.PI * 2
+      const radius = 2.4 + deterministicUnit(hue, index, 11) * 5.8
+      const x = Math.cos(angle) * radius
+      const y = Math.sin(angle) * radius * 0.56
+      const z = -13 + deterministicUnit(hue, index, 12) * 22
+      const length = 0.9 + deterministicUnit(hue, index, 13) * 3.4
+      positions.set([x, y, z, x, y, z - length], index * 6)
+    }
+    const result = new BufferGeometry()
+    result.setAttribute('position', new BufferAttribute(positions, 3))
+    return result
+  }, [hue, profile.speedLineCount])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+  useFrame((_, elapsedSeconds) => {
+    const intensity = intensityRef.current
+    const position = geometry.getAttribute('position') as BufferAttribute
+    const movement = elapsedSeconds * (16 + intensity * 42) * profile.motionScale
+    for (let index = 0; index < position.count; index += 2) {
+      const length = position.getZ(index) - position.getZ(index + 1)
+      let z = position.getZ(index) - movement
+      if (z < -14) z += 23
+      position.setZ(index, z)
+      position.setZ(index + 1, z - length)
+    }
+    position.needsUpdate = true
+    if (material.current) material.current.opacity = intensity * 0.72
+    if (lines.current) lines.current.visible = enabled && intensity > 0.01
+  })
+
+  return (
+    <lineSegments
+      ref={lines}
+      geometry={geometry}
+      visible={enabled}
+      frustumCulled={false}
+      renderOrder={4}
+    >
+      <lineBasicMaterial
+        ref={material}
+        color={hsl((hue + 18) % 360, 100, 82)}
+        transparent
+        opacity={0}
+        depthWrite={false}
+        blending={AdditiveBlending}
+        toneMapped={false}
+      />
+    </lineSegments>
+  )
+}
+
 function EngineParticles({
   hue,
   flightRef,
+  profile,
+  intensityRef,
 }: {
   hue: number
   flightRef: RefObject<FlightState>
+  profile: TurboVisualProfile
+  intensityRef: RefObject<number>
 }) {
   const geometry = useMemo(() => {
-    const count = 72
+    const count = profile.particleCount
     const positions = new Float32Array(count * 3)
     const colors = new Float32Array(count * 3)
     const hotColor = colorFromHsl(hue, 0.98, 0.78)
@@ -151,7 +230,7 @@ function EngineParticles({
     result.setAttribute('position', new BufferAttribute(positions, 3))
     result.setAttribute('color', new BufferAttribute(colors, 3))
     return result
-  }, [hue])
+  }, [hue, profile.particleCount])
   const material = useRef<ShaderMaterial>(null)
   const uniforms = useMemo(
     () => ({
@@ -164,10 +243,11 @@ function EngineParticles({
   useEffect(() => () => geometry.dispose(), [geometry])
   useFrame((_, elapsedSeconds) => {
     const flight = flightRef.current
-    const intensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
+    const flightIntensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
+    const turboIntensity = intensityRef.current
     const position = geometry.getAttribute('position') as BufferAttribute
-    const speed = (flight.turbo ? 13 : 3.5 + intensity * 5) * elapsedSeconds
-    const limit = flight.turbo ? -12 : -7
+    const speed = (3.5 + flightIntensity * 5 + turboIntensity * 5) * elapsedSeconds
+    const limit = -7 - turboIntensity * 5
     for (let index = 0; index < position.count; index += 1) {
       let z = position.getZ(index) - speed
       if (z < limit) z = -2.52
@@ -175,8 +255,8 @@ function EngineParticles({
     }
     position.needsUpdate = true
     if (material.current) {
-      material.current.uniforms.uSize.value = flight.turbo ? 2.6 : 1.1 + intensity * 0.7
-      material.current.uniforms.uOpacity.value = flight.turbo ? 0.9 : 0.4 + intensity * 0.32
+      material.current.uniforms.uSize.value = 1.1 + flightIntensity * 0.7 + turboIntensity * 0.8
+      material.current.uniforms.uOpacity.value = 0.4 + flightIntensity * 0.32 + turboIntensity * 0.18
     }
   })
 
@@ -223,10 +303,12 @@ function EngineExhaust({
   side,
   accentHue,
   flightRef,
+  intensityRef,
 }: {
   side: number
   accentHue: number
   flightRef: RefObject<FlightState>
+  intensityRef: RefObject<number>
 }) {
   const outer = useRef<Mesh>(null)
   const core = useRef<Mesh>(null)
@@ -235,20 +317,21 @@ function EngineExhaust({
 
   useFrame(({ clock }) => {
     const flight = flightRef.current
-    const intensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
+    const flightIntensity = Math.min(1, Math.abs(flight.speed) / NORMAL_FLIGHT_SPEED)
+    const turboIntensity = intensityRef.current
     const pulse = 0.94 + Math.sin(clock.elapsedTime * 22 + side) * 0.06
-    const trailLength = flight.turbo ? 9.5 : 0.7 + intensity * 3.5
-    const coreLength = trailLength * (flight.turbo ? 0.78 : 0.62)
-    const outerWidth = flight.turbo ? 0.38 : 0.2 + intensity * 0.1
+    const trailLength = 0.7 + flightIntensity * 3.5 + turboIntensity * 5.3
+    const coreLength = trailLength * (0.62 + turboIntensity * 0.16)
+    const outerWidth = 0.2 + flightIntensity * 0.1 + turboIntensity * 0.08
     outer.current?.position.set(side * 1.18, -0.08, -2.56 - trailLength / 2)
     outer.current?.scale.set(outerWidth * pulse, trailLength, outerWidth * pulse)
     core.current?.position.set(side * 1.18, -0.08, -2.54 - coreLength / 2)
     core.current?.scale.set(0.09 * pulse, coreLength, 0.09 * pulse)
     if (outerMaterial.current) {
-      outerMaterial.current.opacity = flight.turbo ? 0.42 : 0.05 + intensity * 0.13
+      outerMaterial.current.opacity = 0.05 + flightIntensity * 0.13 + turboIntensity * 0.24
     }
     if (coreMaterial.current) {
-      coreMaterial.current.opacity = flight.turbo ? 0.78 : 0.16 + intensity * 0.28
+      coreMaterial.current.opacity = 0.16 + flightIntensity * 0.28 + turboIntensity * 0.34
     }
   })
 
@@ -288,11 +371,13 @@ function EngineNacelle({
   primaryHue,
   accentHue,
   flightRef,
+  intensityRef,
 }: {
   side: number
   primaryHue: number
   accentHue: number
   flightRef: RefObject<FlightState>
+  intensityRef: RefObject<number>
 }) {
   const glow = useRef<MeshBasicMaterial>(null)
 
@@ -343,7 +428,12 @@ function EngineNacelle({
           toneMapped={false}
         />
       </mesh>
-      <EngineExhaust side={side} accentHue={accentHue} flightRef={flightRef} />
+      <EngineExhaust
+        side={side}
+        accentHue={accentHue}
+        flightRef={flightRef}
+        intensityRef={intensityRef}
+      />
     </group>
   )
 }
@@ -387,19 +477,39 @@ export function ProceduralShip({
   flightRef,
   primaryHue,
   accentHue,
+  quality,
+  reducedMotion,
+  effectsEnabled,
 }: {
   flightRef: RefObject<FlightState>
   primaryHue: number
   accentHue: number
+  quality: VisualQuality
+  reducedMotion: boolean
+  effectsEnabled: boolean
 }) {
   const ship = useRef<Group>(null)
   const attitude = useRef<Group>(null)
+  const turboIntensity = useRef(0)
+  const turboProfile = useMemo(
+    () => turboVisualProfile(quality, reducedMotion),
+    [quality, reducedMotion],
+  )
 
-  useFrame(() => {
+  useFrame((_, elapsedSeconds) => {
     const flight = flightRef.current
     ship.current?.position.set(flight.x, flight.altitude, flight.z)
     if (ship.current) ship.current.rotation.y = flight.heading
     attitude.current?.rotation.set(flight.pitch, 0, flight.bank)
+
+    const target = isTurboVisualActive(flight, effectsEnabled)
+      ? turboProfile.maximumIntensity
+      : 0
+    turboIntensity.current = advanceTurboVisualIntensity(
+      turboIntensity.current,
+      target,
+      elapsedSeconds,
+    )
   }, -50)
 
   return (
@@ -505,15 +615,28 @@ export function ProceduralShip({
           primaryHue={primaryHue}
           accentHue={accentHue}
           flightRef={flightRef}
+          intensityRef={turboIntensity}
         />
         <EngineNacelle
           side={1}
           primaryHue={primaryHue}
           accentHue={accentHue}
           flightRef={flightRef}
+          intensityRef={turboIntensity}
         />
         <PulsingShipLights accentHue={accentHue} />
-        <EngineParticles hue={accentHue} flightRef={flightRef} />
+        <EngineParticles
+          hue={accentHue}
+          flightRef={flightRef}
+          profile={turboProfile}
+          intensityRef={turboIntensity}
+        />
+        <TurboSpeedLines
+          hue={accentHue}
+          profile={turboProfile}
+          intensityRef={turboIntensity}
+          enabled={effectsEnabled}
+        />
       </group>
     </group>
   )

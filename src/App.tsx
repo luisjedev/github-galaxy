@@ -24,6 +24,7 @@ import {
 } from './domain/celestial-interaction'
 import { evaluateCompatibility, type Compatibility } from './domain/compatibility'
 import { describeShipAppearance } from './domain/flight'
+import { isTurboVisualActive } from './domain/turbo-visual'
 import { type GitHubSystem, type PlanetDescriptor } from './domain/github-system'
 import {
   GalaxyScene,
@@ -889,6 +890,7 @@ function Exploration({
         paused={controlsBlocked}
         settings={visualSettings}
         orbitalVisual={orbitalVisual}
+        turboActive={isTurboVisualActive(flight, !controlsBlocked)}
       />
 
       <div className="celestial-markers" aria-label="Marcadores de cuerpos celestes">

@@ -81,6 +81,11 @@ export function useFlightControls(
   useEffect(() => {
     flightInput.current = { ...idleFlightInput }
     previousFrameTime.current = performance.now()
+    if (controlsBlocked && flightState.current.turbo) {
+      const stoppedTurbo = { ...flightState.current, turbo: false }
+      flightState.current = stoppedTurbo
+      setFlight(stoppedTurbo)
+    }
     if (!controlsBlocked) experienceRef.current?.focus({ preventScroll: true })
   }, [controlsBlocked])
 
