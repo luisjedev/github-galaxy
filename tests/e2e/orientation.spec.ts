@@ -114,6 +114,10 @@ test('mantiene marcadores solo para planetas cercanos y oculta los que están de
   const planetMarkers = page.locator('[data-marker-body^="planet:"]')
   await expect(page.locator('[data-marker-body="star"]')).toHaveCount(1)
   await expect.poll(async () => planetMarkers.count()).toBeGreaterThan(0)
+  // The deterministic fixture starts planet 7 beyond the old clearance but inside
+  // the doubled range, while planet 2 remains well outside the new range.
+  await expect(page.locator('[data-marker-body="planet:7"]')).toHaveCount(1, { timeout: 1_000 })
+  await expect(page.locator('[data-marker-body="planet:2"]')).toHaveCount(0)
   expect(await planetMarkers.count()).toBeLessThan(repositories.length)
   expect(await markers.count()).toBe((await planetMarkers.count()) + 1)
 

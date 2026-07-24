@@ -41,7 +41,9 @@ export interface CelestialMarkerState {
   direction?: Point2D
 }
 
-const PLANET_MARKER_DISCOVERY_CLEARANCE = 18
+// Keep label discovery independent from interaction zones while offering roughly
+// twice the previous surface clearance.
+const PLANET_MARKER_DISCOVERY_CLEARANCE = 36
 // Scale the chase rig with the ship so its screen-space composition stays unchanged.
 const SHIP_CAMERA_COMPOSITION_SCALE = SHIP_WORLD_SCALE / 0.06
 const CHASE_CAMERA_BACK_DISTANCE = 0.85 * SHIP_CAMERA_COMPOSITION_SCALE
