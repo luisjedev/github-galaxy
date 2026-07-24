@@ -40,6 +40,7 @@ Cada sistema es determinista: los mismos datos de GitHub producen el mismo unive
 | `Espacio` | Activar el turbo |
 | `E` | Abrir el perfil o repositorio próximo |
 | `F` | Añadir o quitar el planeta próximo de favoritos |
+| `M` | Abrir o cerrar el menú de favoritos |
 | `R` | Volver al punto de entrada |
 | `Esc` | Abrir el menú de pausa |
 
@@ -67,6 +68,8 @@ La aplicación consulta la REST API pública de GitHub directamente desde el nav
 ## ⭐ Favoritos locales
 
 Los planetas favoritos se guardan en este navegador, se identifican por el ID estable del repositorio y se comparten entre todos los sistemas visitados. Si el almacenamiento local no está disponible, GitGalaxy mantiene una colección temporal en memoria y muestra una advertencia. No se eliminan favoritos inaccesibles ni se realizan peticiones adicionales para validarlos.
+
+Pulsa `M` durante el pilotaje para abrir la colección. El menú es exclusivamente de teclado: `J/K` recorre la lista circularmente, `E` abre el repositorio seleccionado, `F` lo elimina y `M` o `Esc` cierra el menú. Mientras está abierto, la nave, las órbitas, la simulación y el audio reactivo permanecen en pausa.
 
 Solo quedan fuera de alcance los favoritos sincronizados mediante una cuenta o un backend.
 

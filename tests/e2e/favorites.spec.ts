@@ -115,6 +115,150 @@ test('rechaza la estrella y bloquea F durante pausa y teletransporte', async ({ 
   await expect(favoritesState(page)).toHaveAttribute('data-favorite-count', '0')
 })
 
+test('abre y cierra el menú vacío con M o Esc sin activar pausa y bloquea otros modos', async ({ page }) => {
+  await interceptGitHub(page)
+  await page.goto('/pilot')
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+
+  await page.keyboard.down('m')
+  await page.keyboard.down('m')
+  await page.keyboard.up('m')
+  const menu = page.getByRole('dialog', { name: 'Repositorios favoritos' })
+  await expect(menu).toBeVisible()
+  await expect(menu).toHaveCount(1)
+  await expect(menu).toHaveAttribute('data-favorite-count', '0')
+  await expect(menu.getByRole('status')).toHaveText('Acércate a un planeta y pulsa F')
+  await expect(page.locator('[data-simulation-state="paused"]')).toBeVisible()
+  await expect(page.locator('[data-controls-locked="true"]')).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Exploración de pilot' })).toHaveCount(0)
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Exploración de pilot' })).toBeVisible()
+  await page.keyboard.press('m')
+  await expect(menu).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.keyboard.press('r')
+  await expect(page.getByRole('status', { name: 'Secuencia de teletransporte' })).toBeVisible()
+  await page.keyboard.press('m')
+  await expect(menu).toHaveCount(0)
+})
+
+test('lista snapshots recientes sin red, navega circularmente y recuerda selección con scroll', async ({ page }) => {
+  const snapshots = Array.from({ length: 9 }, (_, index) => ({
+    repositoryId: index + 10,
+    owner: `owner-${index}`,
+    name: `repo-${index}`,
+    description: `Descripción ${index}`,
+    language: index % 2 ? 'Rust' : 'TypeScript',
+    stars: index * 11,
+    url: `https://github.com/owner-${index}/repo-${index}`,
+    addedAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+  }))
+  await page.addInitScript((favorites) => {
+    localStorage.setItem('gitgalaxy:favorites', JSON.stringify({ version: 1, favorites }))
+  }, snapshots)
+  let requests = 0
+  await page.route('https://api.github.com/**', async (route) => {
+    requests += 1
+    const url = new URL(route.request().url())
+    await route.fulfill({
+      json: url.pathname.endsWith('/repos') ? [repository(1, 'pilot')] : profiles.pilot,
+      headers: { 'access-control-expose-headers': 'Link' },
+    })
+  })
+  await page.goto('/pilot')
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+  const requestsBeforeMenu = requests
+
+  await page.keyboard.press('m')
+  const menu = page.getByRole('dialog', { name: 'Repositorios favoritos' })
+  const options = menu.getByRole('option')
+  await expect(options).toHaveCount(9)
+  await expect(options.first()).toContainText('owner-8/repo-8')
+  await expect(options.first()).toContainText('Descripción 8')
+  await expect(options.first()).toContainText('TypeScript')
+  await expect(options.first()).toContainText('88 estrellas')
+  expect(requests).toBe(requestsBeforeMenu)
+
+  await page.keyboard.press('k')
+  await expect(options.last()).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('j')
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.down('j')
+  await page.keyboard.down('j')
+  await page.keyboard.up('j')
+  await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true')
+  for (let index = 0; index < 6; index += 1) await page.keyboard.press('j')
+  await expect(options.last()).toHaveAttribute('aria-selected', 'true')
+  const visibleBounds = await menu.locator('[data-testid="favorites-list"]').evaluate((list) => {
+    const selected = list.querySelector('[aria-selected="true"]')!
+    const listBox = list.getBoundingClientRect()
+    const rowBox = selected.getBoundingClientRect()
+    return { top: rowBox.top >= listBox.top, bottom: rowBox.bottom <= listBox.bottom + 1 }
+  })
+  expect(visibleBounds).toEqual({ top: true, bottom: true })
+
+  await page.keyboard.press('m')
+  await page.keyboard.press('m')
+  await expect(options.last()).toHaveAttribute('aria-selected', 'true')
+})
+
+test('abre y elimina el favorito seleccionado sin filtrar E, F o J/K al vuelo', async ({ page, context }) => {
+  const snapshots = [
+    { repositoryId: 3, owner: 'third', name: 'world', description: null, language: null, stars: 3, url: 'https://github.com/third/world', addedAt: '2026-03-01T00:00:00Z' },
+    { repositoryId: 2, owner: 'second', name: 'world', description: 'Second', language: 'Go', stars: 2, url: 'https://github.com/second/world', addedAt: '2026-02-01T00:00:00Z' },
+    { repositoryId: 1, owner: 'pilot', name: 'pilot-world', description: 'Pilot', language: 'TypeScript', stars: 1, url: 'https://github.com/pilot/pilot-world', addedAt: '2026-01-01T00:00:00Z' },
+  ]
+  await page.addInitScript((favorites) => {
+    localStorage.setItem('gitgalaxy:favorites', JSON.stringify({ version: 1, favorites }))
+  }, snapshots)
+  await interceptGitHub(page)
+  await page.goto('/pilot')
+  await expect(page.locator('[data-app-state="exploration"]')).toBeVisible()
+  const altitudeBefore = await page.getByTestId('flight-state').getAttribute('data-altitude')
+  await page.keyboard.press('m')
+  const menu = page.getByRole('dialog', { name: 'Repositorios favoritos' })
+  await expect(menu).toBeVisible()
+
+  await page.keyboard.down('j')
+  await page.waitForTimeout(120)
+  await page.keyboard.up('j')
+  await expect(menu.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('flight-state')).toHaveAttribute('data-altitude', altitudeBefore!)
+
+  const popupPromise = context.waitForEvent('page')
+  await page.keyboard.down('e')
+  await page.keyboard.down('e')
+  await page.keyboard.up('e')
+  const popup = await popupPromise
+  await popup.waitForLoadState('domcontentloaded')
+  expect(popup.url()).toBe('https://github.com/second/world')
+  expect(await popup.evaluate(() => window.opener)).toBeNull()
+  expect(context.pages()).toHaveLength(2)
+  await popup.close()
+  await expect(menu.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true')
+
+  await page.keyboard.down('f')
+  await page.keyboard.down('f')
+  await page.keyboard.up('f')
+  await expect(menu).toHaveAttribute('data-favorite-count', '2')
+  await expect(menu.getByRole('status', { name: 'Confirmación de favoritos' })).toHaveText('Eliminado de favoritos')
+  await expect(menu.getByRole('option').nth(1)).toContainText('pilot/pilot-world')
+  await expect(menu.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(favoritesState(page)).toHaveAttribute('data-favorite-count', '2')
+
+  await page.keyboard.press('f')
+  await page.keyboard.press('f')
+  await expect(menu).toHaveAttribute('data-favorite-count', '0')
+  await expect(menu.getByRole('status', { name: 'Favoritos vacíos' })).toHaveText('Acércate a un planeta y pulsa F')
+  await expect(page.getByRole('complementary', { name: 'Ficha de pilot-world' })).toBeVisible()
+})
+
 test('un localStorage corrupto usa memoria, avisa una vez y permite seguir explorando', async ({
   page,
 }) => {

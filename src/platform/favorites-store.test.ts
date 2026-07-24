@@ -49,6 +49,13 @@ describe('almacenamiento de favoritos', () => {
       FAVORITES_STORAGE_KEY,
       encodeFavoriteCollection(result.favorites),
     )
+
+    const removed = store.remove(2)
+    expect(removed.favorites).toEqual([favorite])
+    expect(storage.setItem).toHaveBeenLastCalledWith(
+      FAVORITES_STORAGE_KEY,
+      encodeFavoriteCollection([favorite]),
+    )
   })
 
   it('usa memoria y avisa una sola vez cuando el contenido es corrupto sin sobrescribirlo', () => {

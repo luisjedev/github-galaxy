@@ -23,6 +23,7 @@ export interface FavoriteStoreResult {
 export interface FavoriteStore {
   initial: FavoriteStoreResult
   toggle(repository: GitHubRepository, owner: string, addedAt?: string): FavoriteStoreResult
+  remove(repositoryId: number): FavoriteStoreResult
   refresh(system: GitHubSystem): FavoriteStoreResult
 }
 
@@ -80,6 +81,9 @@ export function createFavoriteStore(
           ? removeFavorite(favorites, repository.id)
           : addFavorite(favorites, repository, owner, addedAt),
       )
+    },
+    remove(repositoryId) {
+      return commit(removeFavorite(favorites, repositoryId))
     },
     refresh(system) {
       const refreshed = refreshFavorites(favorites, system.repositories)

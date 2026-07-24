@@ -62,6 +62,7 @@ const controls = [
   ['Espacio', 'Turbo'],
   ['E', 'Abrir destino'],
   ['F', 'Añadir · quitar planeta favorito'],
+  ['M', 'Abrir favoritos'],
   ['R', 'Volver al punto de entrada'],
   ['Esc', 'Pausa'],
 ] as const
@@ -516,6 +517,98 @@ const audioPresentation: Record<
   unavailable: { action: 'Audio no disponible', icon: '◖×', status: 'Audio no disponible' },
 }
 
+function FavoritesMenu({
+  favorites,
+  selectedRepositoryId,
+  feedback,
+}: {
+  favorites: FavoriteSnapshot[]
+  selectedRepositoryId: number | null
+  feedback: string | null
+}) {
+  const rows = useRef(new Map<number, HTMLDivElement>())
+
+  useEffect(() => {
+    if (selectedRepositoryId === null) return
+    rows.current.get(selectedRepositoryId)?.scrollIntoView({ block: 'nearest' })
+  }, [selectedRepositoryId])
+
+  return (
+    <section
+      className="favorites-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="favorites-title"
+      data-favorite-count={favorites.length}
+    >
+      <div className="glass-panel favorites-panel">
+        <header className="favorites-panel__header">
+          <div>
+            <p className="eyebrow">Colección local</p>
+            <h1 id="favorites-title">Repositorios favoritos</h1>
+          </div>
+          <strong aria-label={`${favorites.length} favoritos`}>{favorites.length}</strong>
+        </header>
+        {favorites.length === 0 ? (
+          <p className="favorites-empty" role="status" aria-label="Favoritos vacíos">
+            Acércate a un planeta y pulsa F
+          </p>
+        ) : (
+          <div
+            className="favorites-list"
+            role="listbox"
+            aria-label={`${favorites.length} repositorios favoritos`}
+            data-testid="favorites-list"
+          >
+            {favorites.map((favorite) => {
+              const selected = favorite.repositoryId === selectedRepositoryId
+              const addedDate = new Intl.DateTimeFormat('es-ES', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }).format(new Date(favorite.addedAt))
+              return (
+                <div
+                  key={favorite.repositoryId}
+                  ref={(row) => {
+                    if (row) rows.current.set(favorite.repositoryId, row)
+                    else rows.current.delete(favorite.repositoryId)
+                  }}
+                  className="favorite-row"
+                  role="option"
+                  aria-selected={selected}
+                  data-repository-id={favorite.repositoryId}
+                >
+                  <div className="favorite-row__heading">
+                    <strong>{favorite.owner}/{favorite.name}</strong>
+                    <time dateTime={favorite.addedAt}>{addedDate}</time>
+                  </div>
+                  <p>{favorite.description ?? 'Sin descripción.'}</p>
+                  <div className="favorite-row__meta">
+                    <span>{favorite.language ?? 'Sin lenguaje'}</span>
+                    <span>{favorite.stars.toLocaleString('es-ES')} estrellas</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <div className="favorites-controls" aria-label="Controles del menú de favoritos">
+          <span><kbd>J/K</kbd> Navegar</span>
+          <span><kbd>E</kbd> Abrir</span>
+          <span><kbd>F</kbd> Eliminar</span>
+          <span><kbd>M/Esc</kbd> Cerrar</span>
+        </div>
+        {feedback ? (
+          <p role="status" aria-label="Confirmación de favoritos" aria-live="polite">
+            {feedback}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 function Exploration({
   system,
   paused,
@@ -528,7 +621,10 @@ function Exploration({
   onSystemArrival,
   favorites,
   favoritesWarning,
+  selectedFavoriteId,
+  onSelectFavorite,
   onToggleFavorite,
+  onRemoveFavorite,
 }: {
   system: GitHubSystem
   paused: boolean
@@ -541,7 +637,10 @@ function Exploration({
   onSystemArrival: (destination: GitHubSystem) => void
   favorites: FavoriteSnapshot[]
   favoritesWarning: boolean
+  selectedFavoriteId: number | null
+  onSelectFavorite: (repositoryId: number | null) => void
   onToggleFavorite: (repository: PlanetDescriptor['repository'] | null, owner: string) => string
+  onRemoveFavorite: (repositoryId: number) => void
 }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
   const [visualSettings] = useState(readVisualSettings)
@@ -550,6 +649,8 @@ function Exploration({
     [system, visualSettings.quality],
   )
   const systemExitRadius = calculateSystemExitRadius(orbitalVisual.asteroidBelt.outerRadius)
+  const [favoritesOpen, setFavoritesOpen] = useState(false)
+  const [favoriteMenuFeedback, setFavoriteMenuFeedback] = useState<string | null>(null)
   const {
     experienceRef,
     flight,
@@ -568,7 +669,7 @@ function Exploration({
     stayInSystem,
   } = useWormholeTravel({
     system,
-    paused,
+    paused: paused || favoritesOpen,
     recentLogins,
     reducedMotion: visualSettings.reducedMotion,
     systemExitRadius,
@@ -592,10 +693,10 @@ function Exploration({
       speed: flight.speed,
       turbo: flight.turbo,
       proximity: Boolean(activeBody),
-      paused,
+      paused: paused || favoritesOpen,
       teleportPhase: wormholeAudioPhase,
     })
-  }, [activeBody, audioState, flight.speed, flight.turbo, onAudioUpdate, paused, wormholeAudioPhase])
+  }, [activeBody, audioState, favoritesOpen, flight.speed, flight.turbo, onAudioUpdate, paused, wormholeAudioPhase])
 
   const currentAudioPresentation = audioPresentation[audioState]
 
@@ -614,6 +715,52 @@ function Exploration({
       autoFocus
       onKeyDown={(event) => {
         const key = event.key.toLowerCase()
+        if (favoritesOpen) {
+          const isSingleAction = key === 'm' || key === 'e' || key === 'f' || key === 'escape'
+          if (key === 'tab') {
+            event.preventDefault()
+            return
+          }
+          if (!['j', 'k', 'm', 'e', 'f', 'escape'].includes(key) || (isSingleAction && event.repeat)) return
+          event.preventDefault()
+          event.stopPropagation()
+          if (key === 'm' || key === 'escape') {
+            setFavoritesOpen(false)
+            setFavoriteMenuFeedback(null)
+            return
+          }
+          if (favorites.length === 0) return
+          const selectedIndex = Math.max(
+            0,
+            favorites.findIndex((favorite) => favorite.repositoryId === selectedFavoriteId),
+          )
+          if (key === 'j' || key === 'k') {
+            const direction = key === 'j' ? 1 : -1
+            const nextIndex = (selectedIndex + direction + favorites.length) % favorites.length
+            onSelectFavorite(favorites[nextIndex].repositoryId)
+            return
+          }
+          const selected = favorites[selectedIndex]
+          if (key === 'e') {
+            window.open(selected.url, '_blank', 'noopener,noreferrer')
+            return
+          }
+          const nextSelection = favorites[selectedIndex + 1] ?? favorites[selectedIndex - 1] ?? null
+          onSelectFavorite(nextSelection?.repositoryId ?? null)
+          onRemoveFavorite(selected.repositoryId)
+          setFavoriteMenuFeedback('Eliminado de favoritos')
+          return
+        }
+        if (key === 'm') {
+          if (event.repeat || paused || controlsBlocked || teleportPhase !== 'idle' || wormhole.phase !== 'idle') return
+          event.preventDefault()
+          if (!favorites.some((favorite) => favorite.repositoryId === selectedFavoriteId)) {
+            onSelectFavorite(favorites[0]?.repositoryId ?? null)
+          }
+          setFavoriteMenuFeedback(null)
+          setFavoritesOpen(true)
+          return
+        }
         if (key === 'f') {
           if (event.repeat || controlsBlocked || teleportPhase !== 'idle') return
           event.preventDefault()
@@ -985,6 +1132,14 @@ function Exploration({
         <CreatorCredit variant="game" />
       </div>
 
+      {favoritesOpen ? (
+        <FavoritesMenu
+          favorites={favorites}
+          selectedRepositoryId={selectedFavoriteId}
+          feedback={favoriteMenuFeedback}
+        />
+      ) : null}
+
       {paused ? (
         <section
           className="pause-overlay"
@@ -1188,6 +1343,9 @@ function AppView({
   const [recentLogins, setRecentLogins] = useState<string[]>([])
   const [favoriteStore] = useState(() => createFavoriteStore(() => window.localStorage))
   const [favorites, setFavorites] = useState(favoriteStore.initial.favorites)
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<number | null>(
+    favoriteStore.initial.favorites[0]?.repositoryId ?? null,
+  )
   const [favoritesWarning, setFavoritesWarning] = useState(favoriteStore.initial.warning)
   const applyFavoriteResult = useCallback((result: FavoriteStoreResult) => {
     setFavorites(result.favorites)
@@ -1273,6 +1431,8 @@ function AppView({
           onReturnToMenu={returnToMenu}
           favorites={favorites}
           favoritesWarning={favoritesWarning}
+          selectedFavoriteId={selectedFavoriteId}
+          onSelectFavorite={setSelectedFavoriteId}
           onToggleFavorite={(repository, owner) => {
             if (!repository) return 'Acércate a un planeta para añadirlo a favoritos'
             const wasFavorite = favorites.some(
@@ -1280,6 +1440,9 @@ function AppView({
             )
             applyFavoriteResult(favoriteStore.toggle(repository, owner))
             return wasFavorite ? 'Eliminado de favoritos' : 'Añadido a favoritos'
+          }}
+          onRemoveFavorite={(repositoryId) => {
+            applyFavoriteResult(favoriteStore.remove(repositoryId))
           }}
           onSystemArrival={(destination) => {
             if (state.name !== 'exploration' && state.name !== 'pause') return

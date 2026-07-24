@@ -77,6 +77,8 @@ test('cruzar el cinturón abre una sola decisión, bloquea controles y quedarse 
   await expect(page.getByTestId('flight-state')).toHaveAttribute('data-speed', '0.000')
   await expect(page.locator('.celestial-card:not(.system-exit-dialog)')).toHaveCount(0)
 
+  await page.keyboard.press('m')
+  await expect(page.getByRole('dialog', { name: 'Repositorios favoritos' })).toHaveCount(0)
   await page.keyboard.press('Escape')
   await page.keyboard.press('r')
   await page.keyboard.press('e')
@@ -132,6 +134,8 @@ test('el menú de pausa permite usar el agujero de gusano sin pilotar hasta el l
 
   await expect(pauseMenu).toHaveCount(0)
   await expect(page.getByRole('status', { name: 'Viaje por el agujero de gusano' })).toBeVisible()
+  await page.keyboard.press('m')
+  await expect(page.getByRole('dialog', { name: 'Repositorios favoritos' })).toHaveCount(0)
   await expect(page.locator('[data-app-state="exploration"]')).toHaveAttribute(
     'data-controls-locked',
     'true',
