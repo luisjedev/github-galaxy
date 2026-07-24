@@ -24,7 +24,7 @@ GitGalaxy transforma los datos públicos de un perfil de GitHub en una galaxia p
 - ⭐ El perfil se convierte en la estrella central.
 - 🪐 Los repositorios más relevantes se representan como planetas.
 - 🎨 El lenguaje, tamaño, actividad y estado de cada proyecto determinan su apariencia.
-- 🚀 Una nave low-poly permite recorrer el sistema en tercera persona.
+- 🚀 Una nave low-poly permite recorrer el sistema en tercera persona o desde una cabina en primera persona.
 - 🌀 Los agujeros de gusano llevan a otros perfiles públicos aleatorios.
 - 🔊 La música, el motor y los efectos se generan en tiempo real con Web Audio.
 
@@ -38,6 +38,7 @@ Cada sistema es determinista: los mismos datos de GitHub producen el mismo unive
 | `A` / `D` | Girar a izquierda · derecha |
 | `J` / `K` | Inclinar abajo · arriba |
 | `Espacio` | Activar el turbo |
+| `C` | Cambiar entre tercera persona y la cabina en primera persona |
 | `E` | Abrir el perfil o repositorio próximo |
 | `F` | Añadir o quitar el planeta próximo de favoritos |
 | `M` | Abrir o cerrar el menú de favoritos |
@@ -45,6 +46,8 @@ Cada sistema es determinista: los mismos datos de GitHub producen el mismo unive
 | `Esc` | Abrir el menú de pausa |
 
 > GitGalaxy está diseñado para ordenadores de escritorio con teclado y un navegador compatible con WebGL.
+
+Al pulsar `C`, la cámara cambia suavemente entre la persecución exterior y el puesto de pilotaje. La cabina conserva las ayudas de navegación, muestra velocidad, altitud y turbo en sus instrumentos, y adapta el motor y las señales electrónicas a una mezcla interior más grave y amortiguada. El control global de audio silencia también todos los sonidos de cabina.
 
 ## 🛠️ Stack
 

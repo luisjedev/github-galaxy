@@ -66,7 +66,23 @@ async function installControlledAudioContext(page: Page) {
       destination = {}
       createGain() { return { gain: { value: 1, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} }, connect() {}, disconnect() {} } }
       createOscillator() { return { type: 'sine', frequency: { value: 440, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} }, detune: { value: 0 }, connect() {}, disconnect() {}, start() {}, stop() {} } }
-      createBiquadFilter() { return { type: 'lowpass', frequency: { value: 440 }, Q: { value: 1 }, connect() {}, disconnect() {} } }
+      createBiquadFilter() {
+        const parameter = (value: number) => ({
+          value,
+          cancelScheduledValues() {},
+          setValueAtTime() {},
+          linearRampToValueAtTime() {},
+          exponentialRampToValueAtTime() {},
+          setTargetAtTime() {},
+        })
+        return {
+          type: 'lowpass',
+          frequency: parameter(440),
+          Q: parameter(1),
+          connect() {},
+          disconnect() {},
+        }
+      }
       createBuffer(_channels: number, length: number) { return { getChannelData: () => new Float32Array(length) } }
       createBufferSource() { return { buffer: null, loop: false, connect() {}, disconnect() {}, start() {}, stop() {} } }
       async resume() { this.state = 'running' }

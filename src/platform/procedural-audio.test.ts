@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ProceduralAudioEngine } from './procedural-audio'
+import {
+  ProceduralAudioEngine,
+  selectAudioPresentation,
+} from './procedural-audio'
 
 class FakeAudioParam {
   value = 0
@@ -41,6 +44,46 @@ function installAudioContext(AudioContext: typeof FakeAudioContext | undefined) 
   vi.stubGlobal('window', { AudioContext })
   vi.stubGlobal('AudioContext', AudioContext)
 }
+
+describe('observable audio presentation', () => {
+  const exteriorFlight = {
+    speed: 2,
+    turbo: false,
+    proximity: false,
+    paused: false,
+    teleportPhase: 'idle' as const,
+    cameraMode: 'third-person' as const,
+  }
+
+  it('selects a muffled cockpit mix and electronic signals from real flight state', () => {
+    expect(selectAudioPresentation({ ...exteriorFlight, cameraMode: 'first-person' })).toEqual({
+      mix: 'cockpit',
+      cockpitSignal: 'engine',
+    })
+    expect(selectAudioPresentation({
+      ...exteriorFlight,
+      cameraMode: 'first-person',
+      turbo: true,
+    })).toEqual({ mix: 'cockpit', cockpitSignal: 'turbo' })
+  })
+
+  it('restores the exterior mix and suspends cockpit signals when flight audio is blocked', () => {
+    expect(selectAudioPresentation(exteriorFlight)).toEqual({
+      mix: 'exterior',
+      cockpitSignal: 'off',
+    })
+    expect(selectAudioPresentation({
+      ...exteriorFlight,
+      cameraMode: 'first-person',
+      paused: true,
+    })).toEqual({ mix: 'suspended', cockpitSignal: 'off' })
+    expect(selectAudioPresentation({
+      ...exteriorFlight,
+      cameraMode: 'first-person',
+      teleportPhase: 'wormhole-tunnel',
+    })).toEqual({ mix: 'travel', cockpitSignal: 'off' })
+  })
+})
 
 describe('ProceduralAudioEngine favorite signals', () => {
   it('activates lazily and schedules a short ascending one-shot', async () => {

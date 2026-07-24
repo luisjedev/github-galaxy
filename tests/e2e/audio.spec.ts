@@ -84,10 +84,18 @@ async function installControlledAudioContext(page: Page) {
       }
 
       createBiquadFilter() {
+        const parameter = (value: number) => ({
+          value,
+          cancelScheduledValues() {},
+          setValueAtTime() {},
+          linearRampToValueAtTime() {},
+          exponentialRampToValueAtTime() {},
+          setTargetAtTime() {},
+        })
         return {
           type: 'lowpass',
-          frequency: { value: 440 },
-          Q: { value: 1 },
+          frequency: parameter(440),
+          Q: parameter(1),
           connect() {},
           disconnect() {},
         }
@@ -160,6 +168,46 @@ test('una entrada directa activa el audio por defecto con la primera interacció
   await page.keyboard.up('w')
 })
 
+test('la cabina selecciona su mezcla y señales observables sin alterar las reglas globales', async ({
+  page,
+}) => {
+  await installControlledAudioContext(page)
+  await interceptGitHub(page)
+  await page.goto('/pilot')
+  const exploration = page.locator('[data-app-state="exploration"]')
+  const audio = page.getByTestId('audio-reactivity')
+  await expect(exploration).toBeVisible()
+  await page.getByRole('button', { name: 'Activar audio' }).click()
+
+  await expect(audio).toHaveAttribute('data-audio-mix', 'exterior')
+  await expect(audio).toHaveAttribute('data-cockpit-signal', 'off')
+  await exploration.focus()
+  await page.keyboard.press('c')
+  await expect(audio).toHaveAttribute('data-audio-mix', 'cockpit')
+  await expect(audio).toHaveAttribute('data-cockpit-signal', 'idle')
+  await expect(audio).toHaveAttribute('data-camera-cue', 'enter-cockpit')
+
+  await page.keyboard.down('w')
+  await expect(audio).toHaveAttribute('data-cockpit-signal', 'engine')
+  await page.keyboard.down(' ')
+  await expect(audio).toHaveAttribute('data-cockpit-signal', 'turbo')
+  await page.keyboard.up(' ')
+  await page.keyboard.up('w')
+
+  await page.keyboard.press('Escape')
+  await expect(audio).toHaveAttribute('data-audio-mix', 'suspended')
+  await expect(audio).toHaveAttribute('data-cockpit-signal', 'off')
+  await page.keyboard.press('Escape')
+  await expect(audio).toHaveAttribute('data-audio-mix', 'cockpit')
+
+  await page.getByRole('button', { name: 'Silenciar audio' }).click()
+  await expect(audio).toHaveAttribute('data-audio-output', 'muted')
+  await expect(audio).toHaveAttribute('data-cockpit-signal', 'off')
+  await page.keyboard.press('c')
+  await expect(audio).toHaveAttribute('data-audio-mix', 'exterior')
+  await expect(audio).toHaveAttribute('data-camera-cue', 'suppressed')
+})
+
 test('Explorar activa el paisaje sonoro desde la interacción explícita del menú', async ({
   page,
 }) => {
@@ -221,6 +269,12 @@ test('un fallo de AudioContext no impide explorar ni usar el control global', as
   )
   await expect(page.getByRole('button', { name: 'Audio no disponible' })).toBeDisabled()
   await expect(page.getByTestId('flight-state')).toBeVisible()
+  await page.locator('[data-app-state="exploration"]').focus()
+  await page.keyboard.press('c')
+  await expect(page.getByTestId('active-camera')).toHaveAttribute(
+    'data-camera-mode',
+    'first-person',
+  )
 })
 
 test('la carga y el salto de teletransporte exponen señales sonoras sincronizadas', async ({

@@ -6,12 +6,31 @@ export type TeleportAudioPhase =
   | 'wormhole-tunnel'
   | 'wormhole-arriving'
 
+export type AudioCameraMode = 'first-person' | 'third-person'
+export type AudioMix = 'exterior' | 'cockpit' | 'suspended' | 'travel'
+export type CockpitSignal = 'off' | 'idle' | 'engine' | 'turbo'
+
 export interface ReactiveAudioState {
   speed: number
   turbo: boolean
   proximity: boolean
   paused: boolean
   teleportPhase: TeleportAudioPhase
+  cameraMode: AudioCameraMode
+}
+
+export interface AudioPresentation {
+  mix: AudioMix
+  cockpitSignal: CockpitSignal
+}
+
+export function selectAudioPresentation(state: ReactiveAudioState): AudioPresentation {
+  if (state.paused) return { mix: 'suspended', cockpitSignal: 'off' }
+  if (state.teleportPhase !== 'idle') return { mix: 'travel', cockpitSignal: 'off' }
+  if (state.cameraMode === 'third-person') return { mix: 'exterior', cockpitSignal: 'off' }
+  if (state.turbo) return { mix: 'cockpit', cockpitSignal: 'turbo' }
+  if (Math.abs(state.speed) > 0.05) return { mix: 'cockpit', cockpitSignal: 'engine' }
+  return { mix: 'cockpit', cockpitSignal: 'idle' }
 }
 
 export type FavoriteAudioAction = 'added' | 'removed'
@@ -78,14 +97,19 @@ export class ProceduralAudioEngine {
   private masterGain: GainNode | null = null
   private engineGain: GainNode | null = null
   private engineOscillator: OscillatorNode | null = null
+  private engineFilter: BiquadFilterNode | null = null
   private turboGain: GainNode | null = null
+  private cockpitSignalGain: GainNode | null = null
+  private cockpitSignalOscillator: OscillatorNode | null = null
   private proximityGain: GainNode | null = null
   private teleportGain: GainNode | null = null
   private teleportOscillator: OscillatorNode | null = null
   private muted = false
   private proximityActive = false
   private teleportPhase: TeleportAudioPhase = 'idle'
+  private lastCameraMode: AudioCameraMode | null = null
   private favoriteOneShots = new Set<OscillatorNode>()
+  private cameraOneShots = new Set<OscillatorNode>()
 
   async activate(): Promise<void> {
     if (!this.context) this.createGraph()
@@ -137,6 +161,10 @@ export class ProceduralAudioEngine {
 
   async dispose(): Promise<void> {
     this.stopFavoriteCues()
+    for (const pending of this.cameraOneShots) {
+      try { pending.stop() } catch { /* The node may already have ended. */ }
+    }
+    this.cameraOneShots.clear()
     const context = this.context
     this.context = null
     this.masterGain = null
@@ -144,18 +172,45 @@ export class ProceduralAudioEngine {
   }
 
   update(state: ReactiveAudioState) {
+    const previousCameraMode = this.lastCameraMode
+    this.lastCameraMode = state.cameraMode
     const context = this.context
-    if (!context || !this.engineGain || !this.engineOscillator || !this.turboGain || !this.proximityGain) {
+    if (
+      !context || !this.engineGain || !this.engineOscillator || !this.engineFilter ||
+      !this.turboGain || !this.cockpitSignalGain || !this.cockpitSignalOscillator ||
+      !this.proximityGain
+    ) {
       return
     }
 
     const now = context.currentTime
+    const presentation = selectAudioPresentation(state)
     const movement = Math.min(1, Math.abs(state.speed) / 4)
-    const shouldPlayReactiveAudio = !state.paused && state.teleportPhase === 'idle'
+    const shouldPlayReactiveAudio = presentation.mix === 'exterior' || presentation.mix === 'cockpit'
+    const cockpitMix = presentation.mix === 'cockpit'
     const engineLevel = movement > 0.01 ? 0.004 + movement * 0.026 : 0.001
-    smoothlySet(this.engineGain.gain, shouldPlayReactiveAudio ? engineLevel : 0, now)
-    smoothlySet(this.engineOscillator.frequency, 46 + movement * 42, now)
-    smoothlySet(this.turboGain.gain, shouldPlayReactiveAudio && state.turbo ? 0.026 : 0, now)
+    smoothlySet(this.engineGain.gain, shouldPlayReactiveAudio ? engineLevel * (cockpitMix ? 0.72 : 1) : 0, now)
+    smoothlySet(this.engineOscillator.frequency, cockpitMix ? 34 + movement * 28 : 46 + movement * 42, now)
+    smoothlySet(this.engineFilter.frequency, cockpitMix ? 115 : 210, now)
+    smoothlySet(this.turboGain.gain, shouldPlayReactiveAudio && state.turbo ? (cockpitMix ? 0.014 : 0.026) : 0, now)
+    smoothlySet(
+      this.cockpitSignalGain.gain,
+      presentation.cockpitSignal === 'turbo'
+        ? 0.005
+        : presentation.cockpitSignal === 'engine'
+          ? 0.0015
+          : 0,
+      now,
+    )
+    smoothlySet(
+      this.cockpitSignalOscillator.frequency,
+      presentation.cockpitSignal === 'turbo' ? 740 : 520 + movement * 80,
+      now,
+    )
+
+    if (previousCameraMode && previousCameraMode !== state.cameraMode && !this.muted) {
+      this.playCameraCue(state.cameraMode)
+    }
 
     const proximityActive = shouldPlayReactiveAudio && state.proximity
     if (proximityActive !== this.proximityActive) {
@@ -216,12 +271,51 @@ export class ProceduralAudioEngine {
 
     this.context = context
     this.masterGain = master
+    const cockpitSignalGain = context.createGain()
+    cockpitSignalGain.gain.value = 0
+    cockpitSignalGain.connect(master)
+    const cockpitSignalOscillator = connectOscillator(
+      context,
+      cockpitSignalGain,
+      'sine',
+      520,
+    )
+
     this.engineGain = engineGain
     this.engineOscillator = engineOscillator
+    this.engineFilter = engineFilter
     this.turboGain = turboGain
+    this.cockpitSignalGain = cockpitSignalGain
+    this.cockpitSignalOscillator = cockpitSignalOscillator
     this.proximityGain = proximityGain
     this.teleportGain = teleportGain
     this.teleportOscillator = teleportOscillator
+  }
+
+  private playCameraCue(mode: AudioCameraMode) {
+    const context = this.context
+    const master = this.masterGain
+    if (!context || !master || this.muted) return
+
+    const now = context.currentTime
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = 'sine'
+    const enteringCockpit = mode === 'first-person'
+    oscillator.frequency.setValueAtTime(enteringCockpit ? 620 : 420, now)
+    oscillator.frequency.exponentialRampToValueAtTime(
+      enteringCockpit ? 360 : 700,
+      now + 0.16,
+    )
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.018, now + 0.025)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18)
+    oscillator.connect(gain)
+    gain.connect(master)
+    oscillator.start(now)
+    oscillator.stop(now + 0.2)
+    this.cameraOneShots.add(oscillator)
+    oscillator.onended = () => this.cameraOneShots.delete(oscillator)
   }
 
   private applyMasterLevel() {

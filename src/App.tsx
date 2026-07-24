@@ -37,7 +37,10 @@ import {
   type AudioExperienceState,
   type FavoriteCueResult,
 } from './hooks/use-procedural-audio'
-import type { ReactiveAudioState } from './platform/procedural-audio'
+import {
+  selectAudioPresentation,
+  type ReactiveAudioState,
+} from './platform/procedural-audio'
 import { validateGitHubUsername } from './domain/github-username'
 import { readBrowserCapabilities } from './platform/browser-capabilities'
 import { readVisualSettings } from './platform/visual-settings'
@@ -775,15 +778,30 @@ function Exploration({
     )
   }
 
+  const reactiveAudioState = useMemo<ReactiveAudioState>(() => ({
+    speed: flight.speed,
+    turbo: flight.turbo,
+    proximity: Boolean(activeBody),
+    paused: paused || favoritesOpen,
+    teleportPhase: wormholeAudioPhase,
+    cameraMode,
+  }), [
+    activeBody,
+    cameraMode,
+    favoritesOpen,
+    flight.speed,
+    flight.turbo,
+    paused,
+    wormholeAudioPhase,
+  ])
+  const selectedAudioPresentation = selectAudioPresentation(reactiveAudioState)
+  const audibleCockpitSignal = audioState === 'active'
+    ? selectedAudioPresentation.cockpitSignal
+    : 'off'
+
   useEffect(() => {
-    onAudioUpdate({
-      speed: flight.speed,
-      turbo: flight.turbo,
-      proximity: Boolean(activeBody),
-      paused: paused || favoritesOpen,
-      teleportPhase: wormholeAudioPhase,
-    })
-  }, [activeBody, audioState, favoritesOpen, flight.speed, flight.turbo, onAudioUpdate, paused, wormholeAudioPhase])
+    onAudioUpdate(reactiveAudioState)
+  }, [audioState, onAudioUpdate, reactiveAudioState])
 
   const currentAudioPresentation = audioPresentation[audioState]
 
@@ -1127,6 +1145,20 @@ function Exploration({
       <output
         className="scene-observability"
         data-testid="audio-reactivity"
+        data-audio-mix={selectedAudioPresentation.mix}
+        data-audio-output={
+          audioState === 'active' ? 'audible' : audioState === 'muted' ? 'muted' : 'silent'
+        }
+        data-cockpit-signal={audibleCockpitSignal}
+        data-camera-cue={
+          cameraTransitionId === 0
+            ? 'none'
+            : audioState !== 'active'
+              ? 'suppressed'
+              : cameraMode === 'first-person'
+                ? 'enter-cockpit'
+                : 'exit-cockpit'
+        }
         data-engine-state={Math.abs(flight.speed) > 0.05 && !controlsBlocked && teleportPhase === 'idle' ? 'active' : 'idle'}
         data-turbo-state={flight.turbo && !controlsBlocked && teleportPhase === 'idle' ? 'active' : 'idle'}
         data-proximity-state={activeBody && !controlsBlocked && teleportPhase === 'idle' ? 'active' : 'idle'}

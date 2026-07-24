@@ -73,7 +73,9 @@ export function useProceduralAudio() {
   }, [activate, setAudioState])
 
   const update = useCallback((reactiveState: ReactiveAudioState) => {
-    engineRef.current?.update(reactiveState)
+    const engine = engineRef.current ?? new ProceduralAudioEngine()
+    engineRef.current = engine
+    engine.update(reactiveState)
   }, [])
 
   const playFavoriteCue = useCallback(async (
