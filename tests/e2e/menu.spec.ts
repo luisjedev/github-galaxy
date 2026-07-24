@@ -23,6 +23,7 @@ test('presenta GitGalaxy, los requisitos y los controles de teclado', async ({ p
   await expect(page.getByText('J / K')).toBeVisible()
   await expect(page.getByText('Espacio')).toBeVisible()
   await expect(page.getByText('E', { exact: true })).toBeVisible()
+  await expect(page.getByText('F', { exact: true })).toBeVisible()
   await expect(page.getByText('R', { exact: true })).toBeVisible()
   await expect(page.getByText('Esc', { exact: true })).toBeVisible()
   await expect(page.getByText(/táctil/i)).toHaveCount(0)

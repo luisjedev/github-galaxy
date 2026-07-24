@@ -39,6 +39,7 @@ Cada sistema es determinista: los mismos datos de GitHub producen el mismo unive
 | `J` / `K` | Inclinar abajo · arriba |
 | `Espacio` | Activar el turbo |
 | `E` | Abrir el perfil o repositorio próximo |
+| `F` | Añadir o quitar el planeta próximo de favoritos |
 | `R` | Volver al punto de entrada |
 | `Esc` | Abrir el menú de pausa |
 
@@ -62,6 +63,12 @@ La aplicación consulta la REST API pública de GitHub directamente desde el nav
 - Sin autenticación ni tokens de GitHub.
 - Sin analítica ni seguimiento del visitante.
 - Con caché local de respuestas válidas durante 15 minutos.
+
+## ⭐ Favoritos locales
+
+Los planetas favoritos se guardan en este navegador, se identifican por el ID estable del repositorio y se comparten entre todos los sistemas visitados. Si el almacenamiento local no está disponible, GitGalaxy mantiene una colección temporal en memoria y muestra una advertencia. No se eliminan favoritos inaccesibles ni se realizan peticiones adicionales para validarlos.
+
+Solo quedan fuera de alcance los favoritos sincronizados mediante una cuenta o un backend.
 
 ## 🚀 Desarrollo local
 

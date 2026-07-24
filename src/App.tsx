@@ -1,7 +1,9 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -42,6 +44,8 @@ import {
   loadRandomGitHubSystem,
 } from './platform/github-client'
 import { generateSystemOrbitalVisual } from './domain/orbital-generation'
+import type { FavoriteSnapshot } from './domain/favorites'
+import { createFavoriteStore, type FavoriteStoreResult } from './platform/favorites-store'
 import {
   calculateSystemExitRadius,
   DestinationSelectionError,
@@ -57,6 +61,7 @@ const controls = [
   ['J / K', 'Inclinar abajo · arriba (combinar con W / S)'],
   ['Espacio', 'Turbo'],
   ['E', 'Abrir destino'],
+  ['F', 'Añadir · quitar planeta favorito'],
   ['R', 'Volver al punto de entrada'],
   ['Esc', 'Pausa'],
 ] as const
@@ -521,6 +526,9 @@ function Exploration({
   onTogglePause,
   onReturnToMenu,
   onSystemArrival,
+  favorites,
+  favoritesWarning,
+  onToggleFavorite,
 }: {
   system: GitHubSystem
   paused: boolean
@@ -531,6 +539,9 @@ function Exploration({
   onTogglePause: () => void
   onReturnToMenu: () => void
   onSystemArrival: (destination: GitHubSystem) => void
+  favorites: FavoriteSnapshot[]
+  favoritesWarning: boolean
+  onToggleFavorite: (repository: PlanetDescriptor['repository'] | null, owner: string) => string
 }) {
   const { profile, ownRepositoryCount, planets, starAppearance, starSeed } = system
   const [visualSettings] = useState(readVisualSettings)
@@ -565,8 +576,16 @@ function Exploration({
   })
   const shipAppearance = describeShipAppearance(system)
   const [orientationMarkers, setOrientationMarkers] = useState<CelestialMarkerState[]>([])
+  const [favoriteFeedback, setFavoriteFeedback] = useState<string | null>(null)
+  const favoriteFeedbackTimer = useRef<number | null>(null)
   const starMarker = orientationMarkers.find((marker) => marker.key === 'star')
   const starGuide = placeStarGuide(starMarker, window.innerWidth / window.innerHeight)
+
+  useEffect(() => () => {
+    if (favoriteFeedbackTimer.current !== null) {
+      window.clearTimeout(favoriteFeedbackTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     onAudioUpdate({
@@ -594,7 +613,25 @@ function Exploration({
       tabIndex={0}
       autoFocus
       onKeyDown={(event) => {
-        if (event.key !== 'Escape' || event.repeat) return
+        const key = event.key.toLowerCase()
+        if (key === 'f') {
+          if (event.repeat || controlsBlocked || teleportPhase !== 'idle') return
+          event.preventDefault()
+          const message = onToggleFavorite(
+            activeBody?.kind === 'planet' ? activeBody.planet.repository : null,
+            profile.login,
+          )
+          setFavoriteFeedback(message)
+          if (favoriteFeedbackTimer.current !== null) {
+            window.clearTimeout(favoriteFeedbackTimer.current)
+          }
+          favoriteFeedbackTimer.current = window.setTimeout(
+            () => setFavoriteFeedback(null),
+            2_200,
+          )
+          return
+        }
+        if (key !== 'escape' || event.repeat) return
         event.preventDefault()
         if (wormhole.phase === 'idle') onTogglePause()
       }}
@@ -707,6 +744,37 @@ function Exploration({
       {activeBody && wormhole.phase === 'idle'
         ? <CelestialCard activeBody={activeBody} system={system} />
         : null}
+
+      <output
+        className="scene-observability"
+        data-testid="favorites-state"
+        data-favorite-count={favorites.length}
+        data-active-favorite={
+          activeBody?.kind === 'planet' &&
+          favorites.some((favorite) => favorite.repositoryId === activeBody.planet.repository.id)
+        }
+        aria-label="Colección de favoritos"
+      >
+        {favorites.length} repositorios favoritos
+      </output>
+
+      {favoriteFeedback ? (
+        <aside
+          className="favorite-notice"
+          role="status"
+          aria-label="Estado de favoritos"
+          aria-live="polite"
+          data-testid="favorite-feedback"
+        >
+          {favoriteFeedback}
+        </aside>
+      ) : null}
+
+      {favoritesWarning ? (
+        <aside className="favorite-warning" role="alert">
+          Los favoritos no podrán conservarse al cerrar esta pestaña
+        </aside>
+      ) : null}
 
       {atmosphereContact ? (
         <aside
@@ -1118,6 +1186,13 @@ function AppView({
 }) {
   const [state, dispatch] = useReducer(transitionAppState, initialState)
   const [recentLogins, setRecentLogins] = useState<string[]>([])
+  const [favoriteStore] = useState(() => createFavoriteStore(() => window.localStorage))
+  const [favorites, setFavorites] = useState(favoriteStore.initial.favorites)
+  const [favoritesWarning, setFavoritesWarning] = useState(favoriteStore.initial.warning)
+  const applyFavoriteResult = useCallback((result: FavoriteStoreResult) => {
+    setFavorites(result.favorites)
+    if (result.warning) setFavoritesWarning(true)
+  }, [])
   const loadingUsername = state.name === 'loading' ? state.username : null
   const isRandomLoading = state.name === 'loading' && state.random === true
 
@@ -1136,6 +1211,7 @@ function AppView({
     void request
       .then((system) => {
         if (!isActive) return
+        applyFavoriteResult(favoriteStore.refresh(system))
         updateUserPath(system.profile.login, 'replace')
         dispatch({ type: 'SYSTEM_READY', system })
       })
@@ -1152,7 +1228,7 @@ function AppView({
     return () => {
       isActive = false
     }
-  }, [isRandomLoading, loadingUsername])
+  }, [applyFavoriteResult, favoriteStore, isRandomLoading, loadingUsername])
 
   const returnToMenu = () => {
     clearUserPath()
@@ -1195,6 +1271,16 @@ function AppView({
           onAudioUpdate={onAudioUpdate}
           onTogglePause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
           onReturnToMenu={returnToMenu}
+          favorites={favorites}
+          favoritesWarning={favoritesWarning}
+          onToggleFavorite={(repository, owner) => {
+            if (!repository) return 'Acércate a un planeta para añadirlo a favoritos'
+            const wasFavorite = favorites.some(
+              (favorite) => favorite.repositoryId === repository.id,
+            )
+            applyFavoriteResult(favoriteStore.toggle(repository, owner))
+            return wasFavorite ? 'Eliminado de favoritos' : 'Añadido a favoritos'
+          }}
           onSystemArrival={(destination) => {
             if (state.name !== 'exploration' && state.name !== 'pause') return
             const visited = [
@@ -1206,6 +1292,7 @@ function AppView({
               ) === index,
             )
             setRecentLogins(visited.slice(0, 8))
+            applyFavoriteResult(favoriteStore.refresh(destination))
             updateUserPath(destination.profile.login, 'push')
             dispatch({ type: 'REPLACE_SYSTEM', system: destination })
           }}
