@@ -9,6 +9,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import {
   transitionAppState,
   type AppError,
@@ -1742,6 +1743,7 @@ export default function App() {
           onFavoriteCleanup={audio.cancelFavoriteCues}
         />
       )}
+      <Analytics />
     </div>
   )
 }
